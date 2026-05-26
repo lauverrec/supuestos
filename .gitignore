@@ -1,0 +1,18 @@
+# Variables de entorno — NUNCA subir las claves
+backend/.env
+frontend/.env
+
+# Entorno virtual Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node modules
+frontend/node_modules/
+frontend/dist/
+
+# Archivos del sistema
+.DS_Store
+*.log
