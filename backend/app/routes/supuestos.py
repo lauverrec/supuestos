@@ -34,37 +34,23 @@ async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db
     
     # Si no hay chunks usar contexto base
     if not chunks:
-        chunks = ["""
-        INFRACCIONES MUY GRAVES LEPARA:
-        Art. 19.1: actividad sin autorización CON riesgo grave → 30.050,61 € – 601.012,10 € → Dirección General EEPP (art. 29.1)
-        Art. 19.6: extintores insuficientes/caducados → 30.050,61 € – 601.012,10 € → Dirección General EEPP (art. 29.1)
-        Art. 19.7: salida emergencia bloqueada → 30.050,61 € – 601.012,10 € → Dirección General EEPP (art. 29.1)
-        Art. 19.8: exceso aforo con riesgo grave → 30.050,61 € – 601.012,10 € → Dirección General EEPP (art. 29.1)
-        
-        INFRACCIONES GRAVES LEPARA:
-        Art. 20.1: actividad sin autorización SIN riesgo grave → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.3: extintores caducados que conservan eficacia → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.5: permitir fumar/alcohol a menores → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.6: tolerar fumar en lugar prohibido → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.9: exceso aforo sin riesgo grave → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.13: negar hojas reclamaciones → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        Art. 20.19: incumplimiento horario cierre → 300,51 € – 30.050,61 € → El Alcalde (art. 29.2)
-        
-        INFRACCIONES LEVES:
-        Art. 21.6: licencia a nombre anterior propietario → hasta 300,51 € → El Alcalde (art. 29.2)
-        
-        HORARIOS CIERRE (Decreto 155/2018):
-        Hostelería sin Música: 02:00h (L-J) / 03:00h (V/S/VF)
-        Hostelería con Música: 02:00h (L-J) / 03:00h (V/S/VF)
-        Especial Hostelería con Música: 03:00h (L-J) / 04:00h (V/S/VF)
-        Esparcimiento (discotecas): 06:00h (L-J) / 07:00h (V/S/VF)
-        Terrazas: cese 02:00h / desmontaje 02:30h (todos los días)
-        """]
+        raise HTTPException(
+            status_code=404, 
+            detail="Esta materia no tiene contenido indexado todavía. Ve al panel de admin e indexa bloques para esta materia."
+        )
 
     # Generar supuesto
+    # Obtener nombre de la materia
+    materia_info = db.execute(
+        text("SELECT nombre FROM materias WHERE id = :id"),
+        {"id": request.materia_id}
+    ).fetchone()
+
+    nombre_materia = materia_info[0] if materia_info else "Policía Local de Andalucía"
+
     resultado = await claude_service.generar_supuesto(
         chunks=chunks,
-        materia="Policía Administrativa — Espectáculos Públicos Andalucía",
+        materia=nombre_materia,
         dificultad=request.dificultad,
         formato=request.formato
     )

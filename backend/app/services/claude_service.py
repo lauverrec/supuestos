@@ -7,8 +7,9 @@ load_dotenv()
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-SYSTEM_PROMPT = """Eres un sistema experto en oposiciones a Policía Local de Andalucía, 
-especializado en la generación y corrección de supuestos prácticos de examen.
+def get_system_prompt(materia: str) -> str:
+    return f"""Eres un sistema experto en oposiciones a Policía Local de Andalucía, 
+especializado en la generación y corrección de supuestos prácticos de examen en la materia: {materia}.
 
 REGLAS ABSOLUTAS — NUNCA las incumplas:
 1. NUNCA inventes artículos, normas o sanciones. 
@@ -105,7 +106,7 @@ Devuelve SOLO este JSON:
             response = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=4000,
-                system=SYSTEM_PROMPT,
+                system=get_system_prompt(materia),
                 messages=[{"role": "user", "content": prompt}]
             )
             

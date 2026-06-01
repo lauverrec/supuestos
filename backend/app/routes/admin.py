@@ -108,3 +108,12 @@ async def estadisticas(db: Session = Depends(get_db)):
     stats["total_chunks"] = db.execute(text("SELECT COUNT(*) FROM chunks")).fetchone()[0]
     stats["puntuacion_media"] = db.execute(text("SELECT ROUND(AVG(puntuacion)::numeric, 2) FROM respuestas")).fetchone()[0]
     return stats
+
+@router.delete("/bloques/{bloque_id}")
+async def borrar_bloque(bloque_id: str, db: Session = Depends(get_db)):
+    # Borrar chunks asociados primero
+    db.execute(text("DELETE FROM chunks WHERE bloque_id = :id"), {"id": bloque_id})
+    # Borrar el bloque
+    db.execute(text("DELETE FROM bloques WHERE id = :id"), {"id": bloque_id})
+    db.commit()
+    return {"ok": True, "mensaje": "Bloque eliminado"}

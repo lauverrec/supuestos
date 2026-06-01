@@ -125,15 +125,15 @@ export default function Admin() {
             { id: 'bloques', label: 'Bloques indexados' },
             { id: 'nuevo', label: 'Crear bloque' },
             { id: 'indexar', label: 'Indexar contenido' },
+            { id: 'materia', label: 'Crear materia' },
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? 'bg-policial-azul text-white'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-              }`}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${tab === t.id
+                ? 'bg-policial-azul text-white'
+                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                }`}
             >
               {t.label}
             </button>
@@ -159,11 +159,11 @@ export default function Admin() {
                     <div className="flex items-center gap-2">
                       {b.chunks > 0
                         ? <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                            <CheckCircle size={12} /> Indexado
-                          </span>
+                          <CheckCircle size={12} /> Indexado
+                        </span>
                         : <span className="flex items-center gap-1 text-xs text-yellow-600 font-medium">
-                            <AlertCircle size={12} /> Sin indexar
-                          </span>
+                          <AlertCircle size={12} /> Sin indexar
+                        </span>
                       }
                       <button
                         onClick={() => {
@@ -173,6 +173,16 @@ export default function Admin() {
                         className="text-xs text-policial-azulMedio hover:underline ml-2"
                       >
                         Indexar →
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`¿Eliminar el bloque "${b.titulo}"?`)) return;
+                          await api.delete(`/admin/bloques/${b.id}`);
+                          await cargarDatos();
+                        }}
+                        className="text-xs text-red-500 hover:underline ml-2"
+                      >
+                        Eliminar
                       </button>
                     </div>
                   </div>
@@ -233,9 +243,8 @@ export default function Admin() {
               </div>
 
               {resultadoBloque && (
-                <div className={`text-sm px-4 py-3 rounded-xl ${
-                  resultadoBloque.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
+                <div className={`text-sm px-4 py-3 rounded-xl ${resultadoBloque.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                  }`}>
                   {resultadoBloque.mensaje}
                 </div>
               )}
@@ -287,9 +296,8 @@ export default function Admin() {
               </div>
 
               {resultadoIndexacion && (
-                <div className={`text-sm px-4 py-3 rounded-xl ${
-                  resultadoIndexacion.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
+                <div className={`text-sm px-4 py-3 rounded-xl ${resultadoIndexacion.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                  }`}>
                   {resultadoIndexacion.mensaje}
                 </div>
               )}
@@ -301,6 +309,61 @@ export default function Admin() {
               >
                 <Upload size={16} />
                 {indexando ? 'Indexando...' : 'Indexar bloque'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Crear materia */}
+        {tab === 'materia' && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-bold text-gray-800 mb-6">Crear nueva materia</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                <input
+                  type="text"
+                  id="materia-nombre"
+                  placeholder="Ej: Tráfico y Seguridad Vial"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <input
+                  type="text"
+                  id="materia-descripcion"
+                  placeholder="Ej: Normativa de tráfico, vehículos y conductores"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
+                <input
+                  type="number"
+                  id="materia-orden"
+                  placeholder="Ej: 2"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const nombre = document.getElementById('materia-nombre').value;
+                  const descripcion = document.getElementById('materia-descripcion').value;
+                  const orden = parseInt(document.getElementById('materia-orden').value) || 1;
+                  if (!nombre) return;
+                  try {
+                    await api.post('/admin/materias', { nombre, descripcion, orden });
+                    alert(`Materia "${nombre}" creada correctamente`);
+                    await cargarDatos();
+                  } catch (e) {
+                    alert('Error creando la materia');
+                  }
+                }}
+                className="w-full bg-policial-azul text-white font-bold py-3 rounded-xl hover:bg-policial-azulMedio transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={16} />
+                Crear materia
               </button>
             </div>
           </div>

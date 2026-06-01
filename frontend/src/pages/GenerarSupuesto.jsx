@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Send, ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { generarSupuesto, responderSupuesto } from '../services/api';
-
-const MATERIA_ID = 'f5897dee-da28-4f92-bfb5-97c649b6342f';
+import api from '../services/api';
 
 export default function GenerarSupuesto() {
   const navigate = useNavigate();
@@ -16,16 +15,32 @@ export default function GenerarSupuesto() {
   const [error, setError] = useState(null);
   const [tiempoInicio, setTiempoInicio] = useState(null);
 
+  const [materias, setMaterias] = useState([]);
+  const [materiaSeleccionada, setMateriaSeleccionada] = useState('');
+
+  useEffect(() => {
+    fetch('http://184.174.39.148/api/admin/materias')
+      .then(r => r.json())
+      .then(data => {
+        setMaterias(data);
+        setMateriaSeleccionada('aleatorio');
+      });
+  }, []);
+
   const handleGenerar = async () => {
     setFase('generando');
     setError(null);
     try {
-      const data = await generarSupuesto(MATERIA_ID, dificultad, formato);
+      let materia = materiaSeleccionada;
+      if (materia === 'aleatorio') {
+        materia = materias[Math.floor(Math.random() * materias.length)].id;
+      }
+      const data = await generarSupuesto(materia, dificultad, formato);
       setSupuesto(data);
       setTiempoInicio(Date.now());
       setFase('resolviendo');
     } catch (e) {
-      setError('Error generando el supuesto. Inténtalo de nuevo.');
+      setError(e.response?.data?.detail || 'Error generando el supuesto. Inténtalo de nuevo.');
       setFase('configurar');
     }
   };
@@ -54,6 +69,20 @@ export default function GenerarSupuesto() {
             <h1 className="text-2xl font-bold text-policial-azul mb-6">Nuevo supuesto práctico</h1>
 
             <div className="space-y-6">
+              {/* Materia */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Materia</label>
+                <select
+                  value={materiaSeleccionada}
+                  onChange={e => setMateriaSeleccionada(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                >
+                  <option value="aleatorio">🎲 Aleatorio</option>
+                  {materias.map(m => (
+                    <option key={m.id} value={m.id}>{m.nombre}</option>
+                  ))}
+                </select>
+              </div>
               {/* Dificultad */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Dificultad</label>
@@ -62,11 +91,10 @@ export default function GenerarSupuesto() {
                     <button
                       key={d}
                       onClick={() => setDificultad(d)}
-                      className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors ${
-                        dificultad === d
-                          ? 'bg-policial-azul text-white shadow-md'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
+                      className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors ${dificultad === d
+                        ? 'bg-policial-azul text-white shadow-md'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
                     >
                       {d === 1 ? '⭐ Básico' : d === 2 ? '⭐⭐ Medio' : '⭐⭐⭐ Avanzado'}
                     </button>
@@ -85,11 +113,10 @@ export default function GenerarSupuesto() {
                     <button
                       key={value}
                       onClick={() => setFormato(value)}
-                      className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors ${
-                        formato === value
-                          ? 'bg-policial-azul text-white shadow-md'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
+                      className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors ${formato === value
+                        ? 'bg-policial-azul text-white shadow-md'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
                     >
                       {label}
                     </button>
