@@ -54,16 +54,59 @@ async def generar_supuesto(chunks: list[str], materia: str, dificultad: int, for
     
     contexto = "\n\n---\n\n".join(chunks)
     
+    instrucciones_dificultad = {
+        1: """NIVEL BÁSICO:
+              - Genera entre 3 y 5 infracciones en total
+              - Infracciones claramente identificables, sin ambigüedad
+              - Situación sencilla con un único tipo de establecimiento
+              - Sin preguntas teóricas adicionales
+              - Circunstancias simples y directas""",
+                      2: """NIVEL MEDIO:
+              - Genera entre 6 y 7 infracciones en total
+              - Al menos 2 infracciones de calificación GRAVE o MUY GRAVE
+              - Puede incluir concurrencia de normativas distintas
+              - Puede añadir UNA pregunta teórica al final del enunciado
+              - Circunstancias con algún elemento que requiera análisis
+              - Si añades pregunta teórica, fórmula SIEMPRE así al final:
+                PREGUNTAS:
+                1. ¿texto de la pregunta?""",
+
+              3: """NIVEL AVANZADO:
+              - Genera entre 8 y 10 infracciones en total
+              - Al menos 3 o 4 infracciones de calificación MUY GRAVE
+              - Obligatorio incluir concurrencia de varias normativas distintas
+              - Obligatorio añadir entre 1 y 2 preguntas teóricas al final
+              - Circunstancias complejas con múltiples sujetos infractores
+              - Las preguntas teóricas SIEMPRE al final en este formato:
+                PREGUNTAS:
+                1. ¿texto de la primera pregunta?
+                2. ¿texto de la segunda pregunta?"""
+    }
+
     prompt = f"""CONTEXTO NORMATIVO — USA SOLO ESTO:
 {contexto}
 
 TAREA: Genera un supuesto práctico con estas características:
 - Materia: {materia}
 - Dificultad: {dificultad}/3
-- Formato: {formato}
-- Combina 2-3 infracciones concurrentes del contexto
 - Establece hora concreta, tipo de establecimiento y circunstancias reales
 - USA EXCLUSIVAMENTE artículos del contexto anterior
+
+INSTRUCCIONES DE DIFICULTAD:
+{instrucciones_dificultad[dificultad]}
+
+FORMATO DEL ENUNCIADO:
+- Redacta el supuesto como texto narrativo continuo, sin listas ni numeración
+- Describe los hechos de forma fluida como si fuera un relato policial real
+- SOLO al final, si hay preguntas teóricas, añádelas en este formato exacto:
+  PREGUNTAS:
+  1. ¿texto de la pregunta?
+  2. ¿texto de la pregunta?
+
+IMPORTANTE SOBRE LAS SANCIONES:
+Para cada infracción fija una sanción concreta (sancion_impuesta) dentro del rango legal.
+Ten en cuenta las circunstancias del supuesto para graduarla.
+Expresa siempre con céntimos exactos: 450,51 € no "unos 450 euros".
 
 Devuelve SOLO este JSON:
 {{
@@ -83,6 +126,8 @@ Devuelve SOLO este JSON:
         "precepto": "art. X Ley Y",
         "sancion_min": 0.00,
         "sancion_max": 0.00,
+        "sancion_impuesta": 0.00,
+        "justificacion_sancion": "razonamiento de por qué se impone esta cuantía concreta",
         "organo_sancionador": "",
         "precepto_organo": "art. X Ley Y"
       }}
@@ -105,7 +150,7 @@ Devuelve SOLO este JSON:
         try:
             response = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=4000,
+                max_tokens=8000,
                 system=get_system_prompt(materia),
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -125,62 +170,71 @@ Devuelve SOLO este JSON:
 
     return {"ok": False, "error": ultimo_error, "usar_banco": True}
 
-
-async def corregir_respuesta(respuesta_usuario: str, solucion_modelo: dict) -> dict:
+async def corregir_respuesta(respuesta_usuario: str, solucion_modelo: dict, materia: str, dificultad: int = 2) -> dict:
     """Corrige la respuesta del opositor comparándola con la solución modelo."""
+
+    criterios_dificultad = {
+    1: "Nivel básico: valora que el opositor identifique al menos 3 de las infracciones presentes, con su calificación y órgano sancionador.",
+    2: "Nivel medio: valora que el opositor identifique al menos 5 infracciones, cite los preceptos exactos, las sanciones con céntimos y los órganos sancionadores correctos.",
+    3: "Nivel avanzado: exige identificación completa de todas las infracciones, preceptos exactos, sanciones con céntimos, órganos sancionadores, actuación policial detallada, documentación generada y respuesta a las preguntas teóricas."
+}
     
-    prompt = f"""SOLUCIÓN MODELO CORRECTA:
-{json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
+    prompt = f"""MATERIA DEL EXAMEN: {materia}
 
-RESPUESTA DEL OPOSITOR:
-{respuesta_usuario}
+    SOLUCIÓN MODELO CORRECTA:
+    {json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
 
-Corrige la respuesta del opositor comparándola con la solución modelo.
-Actúa como tribunal de oposiciones experimentado. Sé preciso, justo y didáctico.
+    CRITERIOS DE CORRECCIÓN: {criterios_dificultad.get(dificultad, criterios_dificultad[2])}
 
-Devuelve SOLO este JSON:
-{{
-  "puntuacion": 0.00,
-  "resumen": "valoración general en 2-3 frases",
-  "infracciones_correctas": [
-    {{"infraccion": "", "observacion": ""}}
-  ],
-  "infracciones_omitidas": [
+    RESPUESTA DEL OPOSITOR:
+    {respuesta_usuario}
+
+    Corrige la respuesta del opositor comparándola con la solución modelo.
+    Actúa como tribunal de oposiciones de {materia} experimentado. Sé preciso, justo y didáctico.
+
+    Devuelve SOLO este JSON:
     {{
-      "infraccion": "",
-      "precepto_correcto": "",
-      "sancion_correcta": "",
-      "organo_correcto": "",
-      "explicacion": ""
-    }}
-  ],
-  "infracciones_erroneas": [
-    {{
-      "lo_que_dijo": "",
-      "lo_correcto": "",
-      "explicacion": ""
-    }}
-  ],
-  "organos_incorrectos": [
-    {{"dijo": "", "correcto": "", "precepto": ""}}
-  ],
-  "calificaciones_incorrectas": [
-    {{"infraccion": "", "dijo": "", "correcto": ""}}
-  ],
-  "actuacion_policial": {{
-    "correcta": true,
-    "observaciones": ""
-  }},
-  "puntos_fuertes": [],
-  "puntos_debiles": [],
-  "consejo_estudio": "qué bloque o normativa repasar"
-}}"""
+      "puntuacion": 0.00,
+      "resumen": "valoración general en 2-3 frases",
+      "infracciones_correctas": [
+        {{"infraccion": "", "observacion": ""}}
+      ],
+      "infracciones_omitidas": [
+        {{
+          "infraccion": "",
+          "precepto_correcto": "",
+          "sancion_correcta": "",
+          "organo_correcto": "",
+          "explicacion": ""
+        }}
+      ],
+      "infracciones_erroneas": [
+        {{
+          "lo_que_dijo": "",
+          "lo_correcto": "",
+          "explicacion": ""
+        }}
+      ],
+      "organos_incorrectos": [
+        {{"dijo": "", "correcto": "", "precepto": ""}}
+      ],
+      "calificaciones_incorrectas": [
+        {{"infraccion": "", "dijo": "", "correcto": ""}}
+      ],
+      "actuacion_policial": {{
+        "correcta": true,
+        "observaciones": ""
+      }},
+      "puntos_fuertes": [],
+      "puntos_debiles": [],
+      "consejo_estudio": "qué bloque o normativa repasar"
+    }}"""
 
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
-            system=SYSTEM_PROMPT,
+            max_tokens=8000,
+            system=get_system_prompt(materia),
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -188,4 +242,82 @@ Devuelve SOLO este JSON:
         return {"ok": True, "datos": resultado}
         
     except Exception as e:
-        return {"ok": False, "error": str(e)},
+        return {"ok": False, "error": str(e)}
+    
+async def generar_preguntas_test(supuesto_enunciado: str, solucion_modelo: dict, materia: str, num_preguntas: int = 6) -> dict:
+    """Genera preguntas tipo test sobre un supuesto ya generado."""
+    
+    prompt = f"""SUPUESTO:
+{supuesto_enunciado}
+
+SOLUCIÓN CORRECTA:
+{json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
+
+TAREA: Genera exactamente {num_preguntas} preguntas tipo test sobre este supuesto.
+Cubre: calificaciones, sanciones impuestas, órganos sancionadores, medidas cautelares y actuación policial.
+Las opciones incorrectas deben ser plausibles pero erróneas para quien domina la materia.
+USA SOLO información que aparezca en la solución correcta.
+
+Devuelve SOLO este JSON:
+{{
+  "preguntas_test": [
+    {{
+      "pregunta": "texto de la pregunta",
+      "opciones": {{
+        "A": "opción A",
+        "B": "opción B",
+        "C": "opción C",
+        "D": "opción D"
+      }},
+      "respuesta_correcta": "A",
+      "explicacion": "explicación de por qué es correcta"
+    }}
+  ]
+}}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4000,
+            system=get_system_prompt(materia),
+            messages=[{"role": "user", "content": prompt}]
+        )
+        resultado = parsear_json(response.content[0].text)
+        return {"ok": True, "datos": resultado}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    
+async def corregir_respuesta_test(respuestas_usuario: dict, preguntas_test: list, materia: str) -> dict:
+    """Corrige respuestas tipo test comparándolas con las correctas."""
+    
+    total = len(preguntas_test)
+    correctas = 0
+    detalle = []
+    
+    for i, pregunta in enumerate(preguntas_test):
+        respuesta_dada = respuestas_usuario.get(str(i), "")
+        correcta = pregunta["respuesta_correcta"]
+        es_correcta = respuesta_dada == correcta
+        if es_correcta:
+            correctas += 1
+        detalle.append({
+            "pregunta": pregunta["pregunta"],
+            "respuesta_dada": respuesta_dada,
+            "respuesta_correcta": correcta,
+            "opcion_correcta_texto": pregunta["opciones"].get(correcta, ""),
+            "es_correcta": es_correcta,
+            "explicacion": pregunta.get("explicacion", "")
+        })
+    
+    puntuacion = round((correctas / total) * 10, 2) if total > 0 else 0
+    
+    return {
+        "ok": True,
+        "datos": {
+            "puntuacion": puntuacion,
+            "correctas": correctas,
+            "total": total,
+            "resumen": f"Has acertado {correctas} de {total} preguntas.",
+            "detalle": detalle
+        }
+    }

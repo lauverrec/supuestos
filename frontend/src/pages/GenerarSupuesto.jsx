@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Send, ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { generarSupuesto, responderSupuesto } from '../services/api';
-import api from '../services/api';
+import { useApi } from '../hooks/useApi';
 
 export default function GenerarSupuesto() {
   const navigate = useNavigate();
@@ -17,6 +17,9 @@ export default function GenerarSupuesto() {
 
   const [materias, setMaterias] = useState([]);
   const [materiaSeleccionada, setMateriaSeleccionada] = useState('');
+  const [respuestasPreguntas, setRespuestasPreguntas] = useState({});
+
+  const api = useApi();
 
   useEffect(() => {
     fetch('http://184.174.39.148/api/admin/materias')
@@ -31,11 +34,17 @@ export default function GenerarSupuesto() {
     setFase('generando');
     setError(null);
     try {
-      let materia = materiaSeleccionada;
-      if (materia === 'aleatorio') {
-        materia = materias[Math.floor(Math.random() * materias.length)].id;
+      let data;
+      if (materiaSeleccionada === 'aleatorio') {
+        const response = await api.post('/supuestos/generar/aleatorio', {
+          materia_id: 'aleatorio',
+          dificultad,
+          formato,
+        });
+        data = response.data;
+      } else {
+        data = await generarSupuesto(materiaSeleccionada, dificultad, formato);
       }
-      const data = await generarSupuesto(materia, dificultad, formato);
       setSupuesto(data);
       setTiempoInicio(Date.now());
       setFase('resolviendo');
@@ -50,12 +59,40 @@ export default function GenerarSupuesto() {
     setFase('enviando');
     try {
       const tiempo = Math.floor((Date.now() - tiempoInicio) / 1000);
-      await responderSupuesto(supuesto.supuesto_id, respuesta, tiempo);
+
+      let respuestaCompleta = respuesta;
+      const { preguntas } = parsearEnunciado(supuesto?.enunciado);
+      if (preguntas.length > 0) {
+        const respuestasTexto = preguntas.map((p, i) =>
+          `PREGUNTA ${i + 1}: ${p}\nRESPUESTA: ${respuestasPreguntas[i] || '(sin respuesta)'}`
+        ).join('\n\n');
+        respuestaCompleta = respuesta + '\n\nRESPUESTAS A PREGUNTAS TEÓRICAS:\n' + respuestasTexto;
+      }
+
+      await responderSupuesto(supuesto.supuesto_id, respuestaCompleta, tiempo);
       navigate(`/correccion/${supuesto.supuesto_id}`);
     } catch (e) {
       setError('Error enviando la respuesta. Inténtalo de nuevo.');
       setFase('resolviendo');
     }
+  };
+
+  const parsearEnunciado = (texto) => {
+    if (!texto) return { enunciado: texto, preguntas: [] };
+
+    const partes = texto.split(/PREGUNTAS:/i);
+    if (partes.length < 2) return { enunciado: texto, preguntas: [] };
+
+    const enunciado = partes[0].trim();
+    const preguntasTexto = partes[1].trim();
+
+    const preguntas = preguntasTexto
+      .split(/\n/)
+      .filter(l => l.trim())
+      .filter(l => /^\d+\./.test(l.trim()))
+      .map(l => l.replace(/^\d+\.\s*/, '').trim());
+
+    return { enunciado, preguntas };
   };
 
   return (
@@ -125,8 +162,21 @@ export default function GenerarSupuesto() {
               </div>
 
               {error && (
-                <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-xl">
+                <div className={`text-sm px-4 py-3 rounded-xl ${error.includes('límite') || error.includes('gratuito') || error.includes('plan')
+                  ? 'bg-policial-azulClaro border border-policial-azul text-policial-azul'
+                  : 'bg-red-50 text-red-700'
+                  }`}>
                   {error}
+                  {(error.includes('límite') || error.includes('gratuito') || error.includes('plan')) && (
+                    <div className="mt-3">
+
+                      <a href="/precios"
+                        className="inline-block bg-policial-azul text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-policial-azulMedio transition-colors"
+                      >
+                        Ver planes →
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -150,6 +200,7 @@ export default function GenerarSupuesto() {
         )}
 
         {/* Resolviendo */}
+        {/* Resolviendo */}
         {fase === 'resolviendo' && supuesto && (
           <div className="space-y-6">
             {/* Enunciado */}
@@ -168,35 +219,96 @@ export default function GenerarSupuesto() {
                 </div>
               </div>
               <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-line">
-                {supuesto.enunciado}
+                {parsearEnunciado(supuesto.enunciado).enunciado}
               </p>
             </div>
 
-            {/* Respuesta */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Tu respuesta
-              </label>
-              <textarea
-                value={respuesta}
-                onChange={(e) => setRespuesta(e.target.value)}
-                placeholder="Desarrolla aquí tu respuesta: consideración previa, infracciones con artículo exacto, calificación, sanción con céntimos, órgano sancionador, actuación policial y documentación..."
-                className="w-full h-64 text-sm text-gray-700 border border-gray-200 rounded-xl p-4 resize-none focus:outline-none focus:ring-2 focus:ring-policial-azul focus:border-transparent"
-              />
-              <div className="flex items-center justify-between mt-4">
-                <span className="text-xs text-gray-400">
-                  {respuesta.length} caracteres
-                </span>
+            {/* Preguntas teóricas */}
+            {parsearEnunciado(supuesto?.enunciado).preguntas.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                <h3 className="font-bold text-gray-800">Preguntas teóricas</h3>
+                {parsearEnunciado(supuesto.enunciado).preguntas.map((pregunta, i) => (
+                  <div key={i}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {i + 1}. {pregunta}
+                    </label>
+                    <textarea
+                      value={respuestasPreguntas[i] || ''}
+                      onChange={e => setRespuestasPreguntas(prev => ({ ...prev, [i]: e.target.value }))}
+                      placeholder="Desarrolla tu respuesta..."
+                      className="w-full h-32 text-sm text-gray-700 border border-gray-200 rounded-xl p-4 resize-none focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Modo TEST */}
+            {supuesto.formato === 'test' && supuesto.preguntas_test ? (
+              <div className="space-y-4">
+                {supuesto.preguntas_test.map((p, i) => (
+                  <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <p className="text-sm font-semibold text-gray-800 mb-4">
+                      {i + 1}. {p.pregunta}
+                    </p>
+                    <div className="space-y-2">
+                      {Object.entries(p.opciones).map(([letra, texto]) => (
+                        <button
+                          key={letra}
+                          onClick={() => {
+                            setRespuesta(prev => {
+                              const obj = prev ? JSON.parse(prev) : {};
+                              obj[i] = letra;
+                              return JSON.stringify(obj);
+                            });
+                          }}
+                          className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors border ${respuesta && JSON.parse(respuesta)[i] === letra
+                            ? 'bg-policial-azul text-white border-policial-azul'
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            }`}
+                        >
+                          <span className="font-bold mr-2">{letra}.</span>{texto}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
                 <button
                   onClick={handleEnviar}
-                  disabled={!respuesta.trim()}
-                  className="flex items-center gap-2 bg-policial-azul text-white font-bold px-6 py-3 rounded-xl hover:bg-policial-azulMedio transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={!respuesta || Object.keys(JSON.parse(respuesta || '{}')).length < supuesto.preguntas_test.length}
+                  className="w-full flex items-center justify-center gap-2 bg-policial-azul text-white font-bold px-6 py-3 rounded-xl hover:bg-policial-azulMedio transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Send size={16} />
                   Enviar para corregir
                 </button>
               </div>
-            </div>
+            ) : (
+              /* Modo DESARROLLO */
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Tu respuesta
+                </label>
+                <textarea
+                  value={respuesta}
+                  onChange={(e) => setRespuesta(e.target.value)}
+                  placeholder="Desarrolla aquí tu respuesta: consideración previa, infracciones con artículo exacto, calificación, sanción con céntimos, órgano sancionador, actuación policial y documentación..."
+                  className="w-full h-64 text-sm text-gray-700 border border-gray-200 rounded-xl p-4 resize-none focus:outline-none focus:ring-2 focus:ring-policial-azul focus:border-transparent"
+                />
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-xs text-gray-400">
+                    {respuesta.length} caracteres
+                  </span>
+                  <button
+                    onClick={handleEnviar}
+                    disabled={!respuesta.trim()}
+                    className="flex items-center gap-2 bg-policial-azul text-white font-bold px-6 py-3 rounded-xl hover:bg-policial-azulMedio transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Send size={16} />
+                    Enviar para corregir
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -210,6 +322,6 @@ export default function GenerarSupuesto() {
         )}
 
       </div>
-    </div>
+    </div >
   );
 }

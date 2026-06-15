@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from .database import test_connection
-from .routes import supuestos, correccion, admin, auth
+from .routes import supuestos, correccion, admin, auth, stripe_routes
 
 load_dotenv()
 
@@ -24,6 +24,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(supuestos.router, prefix="/api/supuestos", tags=["supuestos"])
 app.include_router(correccion.router, prefix="/api/correccion", tags=["correccion"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(stripe_routes.router, prefix="/api/stripe")
 
 @app.on_event("startup")
 async def startup():

@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Upload, CheckCircle, AlertCircle, BarChart2, Database } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import api from '../services/api';
+import { useApi } from '../hooks/useApi';
 
 export default function Admin() {
   const [materias, setMaterias] = useState([]);
   const [bloques, setBloques] = useState([]);
   const [stats, setStats] = useState(null);
   const [tab, setTab] = useState('bloques');
+
+  const api = useApi();
 
   // Formulario nuevo bloque
   const [nuevoBloqueForm, setNuevoBloqueForm] = useState({

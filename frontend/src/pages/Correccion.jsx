@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, XCircle, AlertCircle, BookOpen, PlusCircle } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import api from '../services/api';
+import { useApi } from '../hooks/useApi';
 
 export default function Correccion() {
   const { supuestoId } = useParams();
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const api = useApi();
 
   useEffect(() => {
     api.get(`/supuestos/${supuestoId}`)
@@ -37,23 +39,36 @@ export default function Correccion() {
   );
 
   const { feedback, puntuacion } = datos;
+  const esTest = !!feedback.detalle;
 
-  const colorPuntuacion = puntuacion >= 7 
-    ? 'text-green-600' 
-    : puntuacion >= 5 
-    ? 'text-yellow-600' 
-    : 'text-red-600';
+  const colorPuntuacion = puntuacion >= 7
+    ? 'text-green-600'
+    : puntuacion >= 5
+      ? 'text-yellow-600'
+      : 'text-red-600';
 
   const bgPuntuacion = puntuacion >= 7
     ? 'bg-green-50 border-green-200'
     : puntuacion >= 5
-    ? 'bg-yellow-50 border-yellow-200'
-    : 'bg-red-50 border-red-200';
+      ? 'bg-yellow-50 border-yellow-200'
+      : 'bg-red-50 border-red-200';
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+        {/* Enunciado del supuesto */}
+        {datos.enunciado && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <BookOpen size={18} className="text-policial-azul" />
+              Enunciado del supuesto
+            </h2>
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+              {datos.enunciado}
+            </p>
+          </div>
+        )}
 
         {/* Puntuación */}
         <div className={`rounded-2xl border p-6 ${bgPuntuacion}`}>
@@ -63,6 +78,11 @@ export default function Correccion() {
               <p className={`text-5xl font-bold ${colorPuntuacion}`}>
                 {puntuacion?.toFixed(1)}<span className="text-2xl text-gray-400">/10</span>
               </p>
+              {esTest && (
+                <p className="text-sm text-gray-500 mt-1">
+                  {feedback.correctas} de {feedback.total} preguntas correctas
+                </p>
+              )}
             </div>
             <div className="text-right">
               <Link
@@ -81,19 +101,25 @@ export default function Correccion() {
           )}
         </div>
 
-        {/* Infracciones correctas */}
-        {feedback.infracciones_correctas?.length > 0 && (
+        {/* MODO TEST */}
+        {esTest && feedback.detalle?.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-              <CheckCircle size={18} className="text-green-500" />
-              Infracciones correctas
-            </h2>
-            <div className="space-y-3">
-              {feedback.infracciones_correctas.map((item, i) => (
-                <div key={i} className="bg-green-50 rounded-xl p-4">
-                  <p className="font-medium text-green-800 text-sm">{item.infraccion}</p>
-                  {item.observacion && (
-                    <p className="text-green-700 text-xs mt-1">{item.observacion}</p>
+            <h2 className="font-bold text-gray-800 mb-4">Detalle de respuestas</h2>
+            <div className="space-y-4">
+              {feedback.detalle.map((p, i) => (
+                <div key={i} className={`rounded-xl p-4 ${p.es_correcta ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <p className="text-sm font-medium text-gray-800 mb-2">
+                    {i + 1}. {p.pregunta}
+                  </p>
+                  <p className="text-xs">
+                    <span className="font-semibold">Tu respuesta:</span> {p.respuesta_dada}
+                    {p.es_correcta
+                      ? <span className="text-green-600 ml-2">✅ Correcta</span>
+                      : <span className="text-red-600 ml-2">❌ Incorrecta — Correcta: {p.respuesta_correcta} — {p.opcion_correcta_texto}</span>
+                    }
+                  </p>
+                  {!p.es_correcta && p.explicacion && (
+                    <p className="text-xs text-gray-600 mt-2 italic">{p.explicacion}</p>
                   )}
                 </div>
               ))}
@@ -101,121 +127,234 @@ export default function Correccion() {
           </div>
         )}
 
-        {/* Infracciones omitidas */}
-        {feedback.infracciones_omitidas?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-              <AlertCircle size={18} className="text-yellow-500" />
-              Infracciones omitidas
-            </h2>
-            <div className="space-y-3">
-              {feedback.infracciones_omitidas.map((item, i) => (
-                <div key={i} className="bg-yellow-50 rounded-xl p-4">
-                  <p className="font-medium text-yellow-800 text-sm">{item.infraccion}</p>
-                  <div className="mt-2 space-y-1">
-                    {item.precepto_correcto && (
-                      <p className="text-xs text-yellow-700">
-                        <span className="font-semibold">Precepto:</span> {item.precepto_correcto}
+        {/* MODO DESARROLLO */}
+        {!esTest && (
+          <>
+            {/* Infracciones correctas */}
+            {feedback.infracciones_correctas?.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <CheckCircle size={18} className="text-green-500" />
+                  Infracciones correctas
+                </h2>
+                <div className="space-y-3">
+                  {feedback.infracciones_correctas.map((item, i) => (
+                    <div key={i} className="bg-green-50 rounded-xl p-4">
+                      <p className="font-medium text-green-800 text-sm">{item.infraccion}</p>
+                      {item.observacion && (
+                        <p className="text-green-700 text-xs mt-1">{item.observacion}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Infracciones omitidas */}
+            {feedback.infracciones_omitidas?.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <AlertCircle size={18} className="text-yellow-500" />
+                  Infracciones omitidas
+                </h2>
+                <div className="space-y-3">
+                  {feedback.infracciones_omitidas.map((item, i) => (
+                    <div key={i} className="bg-yellow-50 rounded-xl p-4">
+                      <p className="font-medium text-yellow-800 text-sm">{item.infraccion}</p>
+                      <div className="mt-2 space-y-1">
+                        {item.precepto_correcto && (
+                          <p className="text-xs text-yellow-700">
+                            <span className="font-semibold">Precepto:</span> {item.precepto_correcto}
+                          </p>
+                        )}
+                        {item.sancion_correcta && (
+                          <p className="text-xs text-yellow-700">
+                            <span className="font-semibold">Sanción:</span> {item.sancion_correcta}
+                          </p>
+                        )}
+                        {item.organo_correcto && (
+                          <p className="text-xs text-yellow-700">
+                            <span className="font-semibold">Órgano:</span> {item.organo_correcto}
+                          </p>
+                        )}
+                        {item.explicacion && (
+                          <p className="text-xs text-yellow-600 mt-2 italic">{item.explicacion}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Errores */}
+            {feedback.infracciones_erroneas?.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <XCircle size={18} className="text-red-500" />
+                  Infracciones erróneas
+                </h2>
+                <div className="space-y-3">
+                  {feedback.infracciones_erroneas.map((item, i) => (
+                    <div key={i} className="bg-red-50 rounded-xl p-4">
+                      <p className="text-xs text-red-600">
+                        <span className="font-semibold">Dijiste:</span> {item.lo_que_dijo}
                       </p>
-                    )}
-                    {item.sancion_correcta && (
-                      <p className="text-xs text-yellow-700">
-                        <span className="font-semibold">Sanción:</span> {item.sancion_correcta}
+                      <p className="text-xs text-red-700 mt-1">
+                        <span className="font-semibold">Correcto:</span> {item.lo_correcto}
                       </p>
-                    )}
-                    {item.organo_correcto && (
-                      <p className="text-xs text-yellow-700">
-                        <span className="font-semibold">Órgano:</span> {item.organo_correcto}
-                      </p>
-                    )}
-                    {item.explicacion && (
-                      <p className="text-xs text-yellow-600 mt-2 italic">{item.explicacion}</p>
+                      {item.explicacion && (
+                        <p className="text-xs text-red-600 mt-2 italic">{item.explicacion}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actuación policial */}
+            {feedback.actuacion_policial && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
+                  {feedback.actuacion_policial.correcta
+                    ? <CheckCircle size={18} className="text-green-500" />
+                    : <XCircle size={18} className="text-red-500" />
+                  }
+                  Actuación policial
+                </h2>
+                <p className="text-sm text-gray-600">{feedback.actuacion_policial.observaciones}</p>
+              </div>
+            )}
+
+            {/* Puntos fuertes y débiles */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {feedback.puntos_fuertes?.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h2 className="font-bold text-gray-800 mb-3 text-sm">💪 Puntos fuertes</h2>
+                  <ul className="space-y-2">
+                    {feedback.puntos_fuertes.map((p, i) => (
+                      <li key={i} className="text-xs text-gray-600 flex gap-2">
+                        <span className="text-green-500 shrink-0">✓</span>
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {feedback.puntos_debiles?.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h2 className="font-bold text-gray-800 mb-3 text-sm">⚠️ Puntos débiles</h2>
+                  <ul className="space-y-2">
+                    {feedback.puntos_debiles.map((p, i) => (
+                      <li key={i} className="text-xs text-gray-600 flex gap-2">
+                        <span className="text-yellow-500 shrink-0">!</span>
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Consejo de estudio */}
+            {feedback.consejo_estudio && (
+              <div className="bg-policial-azulClaro border border-policial-azulMedio rounded-2xl p-6">
+                <h2 className="font-bold text-policial-azul flex items-center gap-2 mb-3">
+                  <BookOpen size={18} />
+                  Consejo de estudio
+                </h2>
+                <p className="text-sm text-policial-azul leading-relaxed">{feedback.consejo_estudio}</p>
+              </div>
+            )}
+
+            {/* Solución modelo */}
+            {!esTest && datos.solucion_modelo && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-6">
+                  <BookOpen size={18} className="text-policial-azul" />
+                  Solución modelo
+                </h2>
+
+                {/* Consideración previa */}
+                {datos.solucion_modelo?.consideracion_previa && (
+                  <div className="mb-6 bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Consideración previa</p>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Establecimiento:</span> {datos.solucion_modelo.consideracion_previa.tipo_establecimiento}
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Hora:</span> {datos.solucion_modelo.consideracion_previa.hora}
+                    </p>
+                    {datos.solucion_modelo.consideracion_previa.observaciones && (
+                      <p className="text-sm text-gray-700 mt-1">{datos.solucion_modelo.consideracion_previa.observaciones}</p>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                )}
 
-        {/* Errores */}
-        {feedback.infracciones_erroneas?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-              <XCircle size={18} className="text-red-500" />
-              Infracciones erróneas
-            </h2>
-            <div className="space-y-3">
-              {feedback.infracciones_erroneas.map((item, i) => (
-                <div key={i} className="bg-red-50 rounded-xl p-4">
-                  <p className="text-xs text-red-600">
-                    <span className="font-semibold">Dijiste:</span> {item.lo_que_dijo}
-                  </p>
-                  <p className="text-xs text-red-700 mt-1">
-                    <span className="font-semibold">Correcto:</span> {item.lo_correcto}
-                  </p>
-                  {item.explicacion && (
-                    <p className="text-xs text-red-600 mt-2 italic">{item.explicacion}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                {/* Infracciones */}
+                {datos.solucion_modelo?.infracciones?.length > 0 && (
+                  <div className="mb-6">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Infracciones</p>
+                    <div className="space-y-3">
+                      {datos.solucion_modelo.infracciones.map((inf, i) => (
+                        <div key={i} className="border border-gray-100 rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <p className="text-sm font-medium text-gray-800">{inf.descripcion}</p>
+                            <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-full ${inf.calificacion === 'MUY GRAVE' ? 'bg-red-100 text-red-700' :
+                                inf.calificacion === 'GRAVE' ? 'bg-orange-100 text-orange-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                              }`}>
+                              {inf.calificacion}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-600"><span className="font-medium">Precepto:</span> {inf.precepto}</p>
+                            <p className="text-xs text-gray-600"><span className="font-medium">Sanción impuesta:</span> {inf.sancion_impuesta?.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+                            {inf.justificacion_sancion && (
+                              <p className="text-xs text-gray-500 italic">{inf.justificacion_sancion}</p>
+                            )}
+                            <p className="text-xs text-gray-600"><span className="font-medium">Órgano:</span> {inf.organo_sancionador} ({inf.precepto_organo})</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-        {/* Actuación policial */}
-        {feedback.actuacion_policial && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
-              {feedback.actuacion_policial.correcta
-                ? <CheckCircle size={18} className="text-green-500" />
-                : <XCircle size={18} className="text-red-500" />
-              }
-              Actuación policial
-            </h2>
-            <p className="text-sm text-gray-600">{feedback.actuacion_policial.observaciones}</p>
-          </div>
-        )}
+                {/* Actuación policial */}
+                {datos.solucion_modelo?.actuacion_policial?.length > 0 && (
+                  <div className="mb-6">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Actuación policial</p>
+                    <ol className="space-y-2">
+                      {datos.solucion_modelo.actuacion_policial.map((paso, i) => (
+                        <li key={i} className="flex gap-3 text-sm text-gray-700">
+                          <span className="shrink-0 w-5 h-5 bg-policial-azul text-white rounded-full text-xs flex items-center justify-center font-bold">
+                            {i + 1}
+                          </span>
+                          {paso}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
 
-        {/* Puntos fuertes y débiles */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {feedback.puntos_fuertes?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-bold text-gray-800 mb-3 text-sm">💪 Puntos fuertes</h2>
-              <ul className="space-y-2">
-                {feedback.puntos_fuertes.map((p, i) => (
-                  <li key={i} className="text-xs text-gray-600 flex gap-2">
-                    <span className="text-green-500 shrink-0">✓</span>
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {feedback.puntos_debiles?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-bold text-gray-800 mb-3 text-sm">⚠️ Puntos débiles</h2>
-              <ul className="space-y-2">
-                {feedback.puntos_debiles.map((p, i) => (
-                  <li key={i} className="text-xs text-gray-600 flex gap-2">
-                    <span className="text-yellow-500 shrink-0">!</span>
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Consejo de estudio */}
-        {feedback.consejo_estudio && (
-          <div className="bg-policial-azulClaro border border-policial-azulMedio rounded-2xl p-6">
-            <h2 className="font-bold text-policial-azul flex items-center gap-2 mb-3">
-              <BookOpen size={18} />
-              Consejo de estudio
-            </h2>
-            <p className="text-sm text-policial-azul leading-relaxed">{feedback.consejo_estudio}</p>
-          </div>
+                {/* Documentación */}
+                {datos.solucion_modelo?.documentacion?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Documentación generada</p>
+                    <div className="space-y-2">
+                      {datos.solucion_modelo.documentacion.map((doc, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-xl px-4 py-2">
+                          <span className="text-gray-700">{doc.documento}</span>
+                          <span className="text-xs text-gray-400">{doc.organismo_destino}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
       </div>

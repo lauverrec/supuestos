@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken } from './tokenStore';
 
 const API_URL = 'http://184.174.39.148/api';
 
@@ -9,7 +10,18 @@ const api = axios.create({
   },
 });
 
-// SUPUESTOS
+api.interceptors.request.use(async (config) => {
+  try {
+    const token = await getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (e) {
+    console.error('Error getting token:', e);
+  }
+  return config;
+});
+
 export const generarSupuesto = async (materiaId, dificultad = 2, formato = 'desarrollo') => {
   const response = await api.post('/supuestos/generar', {
     materia_id: materiaId,

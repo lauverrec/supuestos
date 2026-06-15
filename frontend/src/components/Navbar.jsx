@@ -1,13 +1,18 @@
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, BarChart2, PlusCircle, Shield } from 'lucide-react';
+import { BookOpen, BarChart2, PlusCircle, Shield, LogOut, Settings } from 'lucide-react';
+import { useClerk, useUser } from '@clerk/react';
 
 export default function Navbar() {
   const location = useLocation();
+  const { signOut } = useClerk();
+  const { user } = useUser();
+  const isAdmin = user?.publicMetadata?.role === 'admin';
 
   const links = [
     { to: '/dashboard', label: 'Inicio', icon: Shield },
     { to: '/generar', label: 'Nuevo supuesto', icon: PlusCircle },
     { to: '/progreso', label: 'Mi progreso', icon: BarChart2 },
+    ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Settings }] : []),
   ];
 
   return (
@@ -17,7 +22,7 @@ export default function Navbar() {
           <BookOpen size={22} />
           <span>PolicialMVP</span>
         </Link>
-        <div className="flex gap-6">
+        <div className="flex items-center gap-6">
           {links.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
@@ -30,6 +35,18 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
+          {user && (
+            <div className="flex items-center gap-3 ml-4 border-l border-white border-opacity-30 pl-4">
+              <span className="text-xs opacity-70">{user.primaryEmailAddress?.emailAddress}</span>
+              <button
+                onClick={() => signOut()}
+                className="flex items-center gap-1 text-sm opacity-70 hover:opacity-100 transition-opacity"
+              >
+                <LogOut size={16} />
+                Salir
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </nav>
