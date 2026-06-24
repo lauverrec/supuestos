@@ -223,8 +223,9 @@ export default function GenerarSupuesto() {
               </p>
             </div>
 
-            {/* Preguntas teóricas */}
-            {parsearEnunciado(supuesto?.enunciado).preguntas.length > 0 && (
+
+            {/* Preguntas teóricas — solo en modo desarrollo */}
+            {supuesto.formato !== 'test' && parsearEnunciado(supuesto?.enunciado).preguntas.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
                 <h3 className="font-bold text-gray-800">Preguntas teóricas</h3>
                 {parsearEnunciado(supuesto.enunciado).preguntas.map((pregunta, i) => (

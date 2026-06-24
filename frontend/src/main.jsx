@@ -11,21 +11,33 @@ import MiProgreso from './pages/MiProgreso'
 import Admin from './pages/Admin'
 import ProtectedRoute from './components/ProtectedRoute'
 import Precios from './pages/Precios'
+import { useAuth } from '@clerk/react';
+import { Navigate } from 'react-router-dom';
+import Perfil from './pages/Perfil'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+function HomeRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+  
+  if (!isLoaded) return null;
+  if (isSignedIn) return <Navigate to="/dashboard" replace />;
+  return <Landing />;
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<HomeRedirect />} />
           <Route path="/precios" element={<Precios />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/generar" element={<ProtectedRoute><GenerarSupuesto /></ProtectedRoute>} />
           <Route path="/correccion/:supuestoId" element={<ProtectedRoute><Correccion /></ProtectedRoute>} />
           <Route path="/progreso" element={<ProtectedRoute><MiProgreso /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+          <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </ClerkProvider>

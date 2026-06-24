@@ -27,9 +27,8 @@ export default function Navbar() {
             <Link
               key={to}
               to={to}
-              className={`flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-100 ${
-                location.pathname === to ? 'opacity-100 border-b-2 border-white pb-0.5' : 'opacity-70'
-              }`}
+              className={`flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-100 ${location.pathname === to ? 'opacity-100 border-b-2 border-white pb-0.5' : 'opacity-70'
+                }`}
             >
               <Icon size={16} />
               {label}
@@ -37,7 +36,9 @@ export default function Navbar() {
           ))}
           {user && (
             <div className="flex items-center gap-3 ml-4 border-l border-white border-opacity-30 pl-4">
-              <span className="text-xs opacity-70">{user.primaryEmailAddress?.emailAddress}</span>
+              <Link to="/perfil" className="text-xs opacity-70 hover:opacity-100">
+                {user.primaryEmailAddress?.emailAddress}
+              </Link>
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-1 text-sm opacity-70 hover:opacity-100 transition-opacity"

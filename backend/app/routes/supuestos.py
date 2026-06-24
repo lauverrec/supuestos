@@ -45,7 +45,7 @@ async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db
                 ON CONFLICT (clerk_id) DO NOTHING"""),
         {"clerk_id": clerk_id}
     )
-    
+
     db.commit()
 
     # Verificar límite freemium
@@ -107,11 +107,14 @@ async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db
     # Generar preguntas test si procede
     preguntas_test = []
     if request.formato == "test":
+        print(f"Generando preguntas test para dificultad {request.dificultad}")
         test_result = await claude_service.generar_preguntas_test(
             supuesto_enunciado=resultado["datos"]["enunciado"],
             solucion_modelo=resultado["datos"]["solucion_modelo"],
-            materia=nombre_materia
+            materia=nombre_materia,
+            dificultad=request.dificultad
         )
+        print(f"Resultado test: ok={test_result['ok']}, error={test_result.get('error', '')}, preguntas={len(test_result.get('datos', {}).get('preguntas_test', []))}")
         if test_result["ok"]:
             preguntas_test = test_result["datos"].get("preguntas_test", [])
 
@@ -128,7 +131,7 @@ async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db
             "solucion_modelo": json.dumps(resultado["datos"]["solucion_modelo"], ensure_ascii=False),
             "formato": request.formato,
             "dificultad": request.dificultad,
-            "bloques_usados": "{}",
+            "bloques_usados": json.dumps(chunks, ensure_ascii=False),
             "opciones_test": json.dumps(preguntas_test, ensure_ascii=False),
             "usuario_id": clerk_id
         }
@@ -147,7 +150,7 @@ async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db
 async def responder_supuesto(request: ResponderRequest, db: Session = Depends(get_db), clerk_id: str = Depends(get_current_user)):
     
     supuesto_info = db.execute(
-        text("SELECT solucion_modelo, dificultad, formato, opciones_test FROM supuestos_generados WHERE id = :id"),
+        text("SELECT solucion_modelo, dificultad, formato, opciones_test, bloques_usados FROM supuestos_generados WHERE id = :id"),
         {"id": request.supuesto_id}
     ).fetchone()
 
@@ -158,6 +161,8 @@ async def responder_supuesto(request: ResponderRequest, db: Session = Depends(ge
     dificultad = supuesto_info[1] or 2
     formato = supuesto_info[2]
     preguntas_test = supuesto_info[3] if isinstance(supuesto_info[3], list) else json.loads(supuesto_info[3] or "[]")
+
+    chunks_originales = supuesto_info[4] if isinstance(supuesto_info[4], list) else json.loads(supuesto_info[4] or "[]")
 
     materia_result = db.execute(
         text("""SELECT m.nombre FROM materias m 
@@ -185,7 +190,8 @@ async def responder_supuesto(request: ResponderRequest, db: Session = Depends(ge
             respuesta_usuario=request.respuesta_texto,
             solucion_modelo=solucion_modelo,
             materia=nombre_materia,
-            dificultad=dificultad
+            dificultad=dificultad,
+            chunks_originales=chunks_originales
         )
 
     if not correccion["ok"]:

@@ -1,21 +1,28 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, Target, PlusCircle } from 'lucide-react';
+import { TrendingUp, Target, PlusCircle, BookOpen, Star } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { useApi } from '../hooks/useApi';
 import { obtenerHistorial } from '../services/api';
 
 export default function MiProgreso() {
+  const api = useApi();
+  const [progreso, setProgreso] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    obtenerHistorial()
-      .then(setHistorial)
+    Promise.all([
+      api.get('/usuarios/progreso'),
+      obtenerHistorial()
+    ])
+      .then(([pRes, h]) => {
+        setProgreso(pRes.data);
+        setHistorial(h);
+      })
       .catch(console.error)
       .finally(() => setCargando(false));
   }, []);
-
-  const totalSupuestos = historial.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -29,29 +36,24 @@ export default function MiProgreso() {
           {[
             {
               label: 'Supuestos realizados',
-              valor: totalSupuestos,
+              valor: progreso?.total_supuestos ?? '—',
               icon: Target,
               color: 'text-policial-azul',
               bg: 'bg-policial-azulClaro'
             },
             {
               label: 'Esta semana',
-              valor: historial.filter(s => {
-                const fecha = new Date(s.created_at);
-                const semana = new Date();
-                semana.setDate(semana.getDate() - 7);
-                return fecha > semana;
-              }).length,
+              valor: progreso?.esta_semana ?? '—',
               icon: TrendingUp,
               color: 'text-green-600',
               bg: 'bg-green-50'
             },
             {
-              label: 'Materia activa',
-              valor: 'Pol. Admin.',
-              icon: Target,
-              color: 'text-policial-azulMedio',
-              bg: 'bg-blue-50'
+              label: 'Puntuación media',
+              valor: progreso?.puntuacion_media ? `${progreso.puntuacion_media}/10` : '—',
+              icon: Star,
+              color: 'text-yellow-500',
+              bg: 'bg-yellow-50'
             },
           ].map(({ label, valor, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -64,7 +66,67 @@ export default function MiProgreso() {
           ))}
         </div>
 
-        {/* Historial completo */}
+        {/* Por materia */}
+        {progreso?.por_materia?.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+            <h2 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <BookOpen size={18} className="text-policial-azul" />
+              Por materia
+            </h2>
+            <div className="space-y-3">
+              {progreso.por_materia.map((m) => (
+                <div key={m.materia} className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700">{m.materia}</span>
+                      <span className="text-xs text-gray-400">{m.total} supuestos</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className="bg-policial-azul h-2 rounded-full"
+                        style={{ width: `${Math.min((m.total / (progreso.total_supuestos || 1)) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  {m.media && (
+                    <span className={`ml-4 text-sm font-bold ${m.media >= 7 ? 'text-green-600' :
+                        m.media >= 5 ? 'text-yellow-600' :
+                          'text-red-600'
+                      }`}>
+                      {m.media}/10
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Evolución */}
+        {progreso?.evolucion?.length > 1 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+            <h2 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <TrendingUp size={18} className="text-policial-azul" />
+              Evolución de puntuaciones
+            </h2>
+            <div className="flex items-end gap-2 h-24">
+              {progreso.evolucion.map((e, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    className={`w-full rounded-t-lg ${e.puntuacion >= 7 ? 'bg-green-400' :
+                        e.puntuacion >= 5 ? 'bg-yellow-400' :
+                          'bg-red-400'
+                      }`}
+                    style={{ height: `${(e.puntuacion / 10) * 80}px` }}
+                  />
+                  <span className="text-xs text-gray-400">{e.puntuacion.toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Historial */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-bold text-gray-800">Historial completo</h2>
@@ -91,7 +153,15 @@ export default function MiProgreso() {
               {historial.map((s, i) => (
                 <div key={s.id} className="flex items-center gap-4 py-3 border-b border-gray-50 last:border-0">
                   <span className="text-xs text-gray-400 w-6 text-right shrink-0">{i + 1}</span>
-                  <p className="text-sm text-gray-600 flex-1 truncate">{s.enunciado}</p>
+                  <p className="text-sm text-gray-600 flex-1 line-clamp-1">{s.enunciado}</p>
+                  {s.puntuacion && (
+                    <span className={`text-xs font-bold shrink-0 ${s.puntuacion >= 7 ? 'text-green-600' :
+                        s.puntuacion >= 5 ? 'text-yellow-600' :
+                          'text-red-600'
+                      }`}>
+                      {s.puntuacion.toFixed(1)}/10
+                    </span>
+                  )}
                   <span className="text-xs text-gray-400 shrink-0">
                     {new Date(s.created_at).toLocaleDateString('es-ES')}
                   </span>

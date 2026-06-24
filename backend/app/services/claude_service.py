@@ -55,33 +55,32 @@ async def generar_supuesto(chunks: list[str], materia: str, dificultad: int, for
     contexto = "\n\n---\n\n".join(chunks)
     
     instrucciones_dificultad = {
-        1: """NIVEL BÁSICO:
-              - Genera entre 3 y 5 infracciones en total
-              - Infracciones claramente identificables, sin ambigüedad
-              - Situación sencilla con un único tipo de establecimiento
-              - Sin preguntas teóricas adicionales
-              - Circunstancias simples y directas""",
-                      2: """NIVEL MEDIO:
-              - Genera entre 6 y 7 infracciones en total
-              - Al menos 2 infracciones de calificación GRAVE o MUY GRAVE
-              - Puede incluir concurrencia de normativas distintas
-              - Puede añadir UNA pregunta teórica al final del enunciado
-              - Circunstancias con algún elemento que requiera análisis
-              - Si añades pregunta teórica, fórmula SIEMPRE así al final:
-                PREGUNTAS:
-                1. ¿texto de la pregunta?""",
-
-              3: """NIVEL AVANZADO:
-              - Genera entre 8 y 10 infracciones en total
-              - Al menos 3 o 4 infracciones de calificación MUY GRAVE
-              - Obligatorio incluir concurrencia de varias normativas distintas
-              - Obligatorio añadir entre 1 y 2 preguntas teóricas al final
-              - Circunstancias complejas con múltiples sujetos infractores
-              - Las preguntas teóricas SIEMPRE al final en este formato:
-                PREGUNTAS:
-                1. ¿texto de la primera pregunta?
-                2. ¿texto de la segunda pregunta?"""
-    }
+          1: """NIVEL BÁSICO:
+      - Genera entre 3 y 5 infracciones en total
+      - Infracciones claramente identificables, sin ambigüedad
+      - Situación sencilla con un único tipo de establecimiento
+      - Sin preguntas teóricas adicionales
+      - Circunstancias simples y directas""",
+          2: f"""NIVEL MEDIO:
+      - Genera entre 6 y 7 infracciones en total
+      - Al menos 2 infracciones de calificación GRAVE o MUY GRAVE
+      - Puede incluir concurrencia de normativas distintas
+      - Circunstancias con algún elemento que requiera análisis
+      {'''- Puede añadir UNA pregunta teórica al final del enunciado
+      - Si añades pregunta teórica, fórmula SIEMPRE así al final:
+        PREGUNTAS:
+        1. ¿texto de la pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}""",
+          3: f"""NIVEL AVANZADO:
+      - Genera entre 8 y 10 infracciones en total
+      - Al menos 3 o 4 infracciones de calificación MUY GRAVE
+      - Obligatorio incluir concurrencia de varias normativas distintas
+      - Circunstancias complejas con múltiples sujetos infractores
+      {'''- Obligatorio añadir entre 1 y 2 preguntas teóricas al final
+      - Las preguntas teóricas SIEMPRE al final en este formato:
+        PREGUNTAS:
+        1. ¿texto de la primera pregunta?
+        2. ¿texto de la segunda pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}"""
+      }
 
     prompt = f"""CONTEXTO NORMATIVO — USA SOLO ESTO:
 {contexto}
@@ -170,82 +169,112 @@ Devuelve SOLO este JSON:
 
     return {"ok": False, "error": ultimo_error, "usar_banco": True}
 
-async def corregir_respuesta(respuesta_usuario: str, solucion_modelo: dict, materia: str, dificultad: int = 2) -> dict:
-    """Corrige la respuesta del opositor comparándola con la solución modelo."""
-
-    criterios_dificultad = {
-    1: "Nivel básico: valora que el opositor identifique al menos 3 de las infracciones presentes, con su calificación y órgano sancionador.",
-    2: "Nivel medio: valora que el opositor identifique al menos 5 infracciones, cite los preceptos exactos, las sanciones con céntimos y los órganos sancionadores correctos.",
-    3: "Nivel avanzado: exige identificación completa de todas las infracciones, preceptos exactos, sanciones con céntimos, órganos sancionadores, actuación policial detallada, documentación generada y respuesta a las preguntas teóricas."
-}
+async def corregir_respuesta(respuesta_usuario: str, solucion_modelo: dict, materia: str, dificultad: int = 2, chunks_originales: list = []) -> dict:
     
+    contexto_normativo = "\n\n---\n\n".join(chunks_originales) if chunks_originales else ""
+    
+    criterios_dificultad = {
+        1: "Nivel básico: valora que el opositor identifique al menos 3 de las infracciones presentes, con su calificación y órgano sancionador.",
+        2: "Nivel medio: valora que el opositor identifique al menos 5 infracciones, cite los preceptos exactos, las sanciones con céntimos y los órganos sancionadores correctos.",
+        3: "Nivel avanzado: exige identificación completa de todas las infracciones, preceptos exactos, sanciones con céntimos, órganos sancionadores, actuación policial detallada, documentación generada y respuesta a las preguntas teóricas."
+    }
+
     prompt = f"""MATERIA DEL EXAMEN: {materia}
+CRITERIOS DE CORRECCIÓN: {criterios_dificultad.get(dificultad, criterios_dificultad[2])}
 
-    SOLUCIÓN MODELO CORRECTA:
-    {json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
+NORMATIVA DE REFERENCIA — SOLO PUEDES USAR ESTA INFORMACIÓN:
+{contexto_normativo}
 
-    CRITERIOS DE CORRECCIÓN: {criterios_dificultad.get(dificultad, criterios_dificultad[2])}
+SOLUCIÓN MODELO CORRECTA:
+{json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
 
-    RESPUESTA DEL OPOSITOR:
-    {respuesta_usuario}
+RESPUESTA DEL OPOSITOR:
+{respuesta_usuario}
 
-    Corrige la respuesta del opositor comparándola con la solución modelo.
-    Actúa como tribunal de oposiciones de {materia} experimentado. Sé preciso, justo y didáctico.
+REGLAS ABSOLUTAS DE CORRECCIÓN — NUNCA LAS INCUMPLAS:
+1. SOLO puedes citar artículos, sanciones y órganos que aparezcan en la NORMATIVA DE REFERENCIA o en la SOLUCIÓN MODELO.
+2. Si el opositor cita algo que NO aparece en la normativa de referencia ni en la solución modelo, márcalo como ERROR.
+3. Si tú mismo necesitas citar algo para la corrección y NO está en la normativa de referencia, NO lo cites. Escribe "No verificable con la normativa disponible".
+4. NUNCA inventes artículos, sanciones ni órganos sancionadores que no estén en la normativa de referencia.
+5. Es preferible una corrección incompleta que una corrección con datos inventados.
+6. La solución modelo es la referencia de verdad absoluta — si el opositor coincide con ella, es correcto.
 
-    Devuelve SOLO este JSON:
+Actúa como tribunal de oposiciones de {materia} experimentado. Sé preciso, justo y didáctico.
+
+Devuelve SOLO este JSON:
+{{
+  "puntuacion": 0.00,
+  "resumen": "valoración general en 2-3 frases",
+  "infracciones_correctas": [
+    {{"infraccion": "", "observacion": ""}}
+  ],
+  "infracciones_omitidas": [
     {{
-      "puntuacion": 0.00,
-      "resumen": "valoración general en 2-3 frases",
-      "infracciones_correctas": [
-        {{"infraccion": "", "observacion": ""}}
-      ],
-      "infracciones_omitidas": [
-        {{
-          "infraccion": "",
-          "precepto_correcto": "",
-          "sancion_correcta": "",
-          "organo_correcto": "",
-          "explicacion": ""
-        }}
-      ],
-      "infracciones_erroneas": [
-        {{
-          "lo_que_dijo": "",
-          "lo_correcto": "",
-          "explicacion": ""
-        }}
-      ],
-      "organos_incorrectos": [
-        {{"dijo": "", "correcto": "", "precepto": ""}}
-      ],
-      "calificaciones_incorrectas": [
-        {{"infraccion": "", "dijo": "", "correcto": ""}}
-      ],
-      "actuacion_policial": {{
-        "correcta": true,
-        "observaciones": ""
-      }},
-      "puntos_fuertes": [],
-      "puntos_debiles": [],
-      "consejo_estudio": "qué bloque o normativa repasar"
-    }}"""
+      "infraccion": "",
+      "precepto_correcto": "",
+      "sancion_correcta": "",
+      "organo_correcto": "",
+      "explicacion": ""
+    }}
+  ],
+  "infracciones_erroneas": [
+    {{
+      "lo_que_dijo": "",
+      "lo_correcto": "",
+      "explicacion": ""
+    }}
+  ],
+  "organos_incorrectos": [
+    {{"dijo": "", "correcto": "", "precepto": ""}}
+  ],
+  "calificaciones_incorrectas": [
+    {{"infraccion": "", "dijo": "", "correcto": ""}}
+  ],
+  "actuacion_policial": {{
+    "correcta": true,
+    "observaciones": ""
+  }},
+  "puntos_fuertes": [],
+  "puntos_debiles": [],
+  "consejo_estudio": "qué bloque o normativa repasar"
+}}"""
 
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=8000,
+            max_tokens=4000,
             system=get_system_prompt(materia),
             messages=[{"role": "user", "content": prompt}]
         )
-        
         resultado = parsear_json(response.content[0].text)
         return {"ok": True, "datos": resultado}
-        
     except Exception as e:
         return {"ok": False, "error": str(e)}
     
-async def generar_preguntas_test(supuesto_enunciado: str, solucion_modelo: dict, materia: str, num_preguntas: int = 6) -> dict:
-    """Genera preguntas tipo test sobre un supuesto ya generado."""
+async def generar_preguntas_test(supuesto_enunciado: str, solucion_modelo: dict, materia: str, dificultad: int = 2) -> dict:
+    
+    num_preguntas_config = {1: 10, 2: 15, 3: 20}.get(dificultad, 15)
+    
+    # Para niveles altos, dividir en dos tandas
+    if num_preguntas_config > 10:
+        primera_tanda = 10
+        segunda_tanda = num_preguntas_config - 10
+        
+        res1 = await _generar_tanda_preguntas(supuesto_enunciado, solucion_modelo, materia, primera_tanda, offset=0)
+        res2 = await _generar_tanda_preguntas(supuesto_enunciado, solucion_modelo, materia, segunda_tanda, offset=primera_tanda)
+        
+        if res1["ok"] and res2["ok"]:
+            todas = res1["datos"]["preguntas_test"] + res2["datos"]["preguntas_test"]
+            return {"ok": True, "datos": {"preguntas_test": todas}}
+        elif res1["ok"]:
+            return res1
+        else:
+            return {"ok": False, "error": "Error generando preguntas"}
+    else:
+        return await _generar_tanda_preguntas(supuesto_enunciado, solucion_modelo, materia, num_preguntas_config, offset=0)
+
+
+async def _generar_tanda_preguntas(supuesto_enunciado: str, solucion_modelo: dict, materia: str, num_preguntas: int, offset: int = 0) -> dict:
     
     prompt = f"""SUPUESTO:
 {supuesto_enunciado}
@@ -254,9 +283,11 @@ SOLUCIÓN CORRECTA:
 {json.dumps(solucion_modelo, ensure_ascii=False, indent=2)}
 
 TAREA: Genera exactamente {num_preguntas} preguntas tipo test sobre este supuesto.
+{f'Empieza por la pregunta número {offset + 1}.' if offset > 0 else ''}
 Cubre: calificaciones, sanciones impuestas, órganos sancionadores, medidas cautelares y actuación policial.
 Las opciones incorrectas deben ser plausibles pero erróneas para quien domina la materia.
 USA SOLO información que aparezca en la solución correcta.
+No repitas preguntas que ya se hayan hecho sobre los mismos aspectos.
 
 Devuelve SOLO este JSON:
 {{
@@ -278,7 +309,7 @@ Devuelve SOLO este JSON:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
+            max_tokens=8000,
             system=get_system_prompt(materia),
             messages=[{"role": "user", "content": prompt}]
         )
