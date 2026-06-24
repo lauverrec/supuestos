@@ -15,19 +15,21 @@ export default function GenerarSupuesto() {
   const [error, setError] = useState(null);
   const [tiempoInicio, setTiempoInicio] = useState(null);
 
-  const [materias, setMaterias] = useState([]);
-  const [materiaSeleccionada, setMateriaSeleccionada] = useState('');
   const [respuestasPreguntas, setRespuestasPreguntas] = useState({});
+  const [estructura, setEstructura] = useState([]);
+  const [materiaSeleccionada, setMateriaSeleccionada] = useState('aleatorio');
+  const [submateriaSeleccionada, setSubmateriaSeleccionada] = useState('todas');
 
   const api = useApi();
 
   useEffect(() => {
-    fetch('http://184.174.39.148/api/admin/materias')
+    fetch('http://184.174.39.148/api/admin/estructura-materias')
       .then(r => r.json())
       .then(data => {
-        setMaterias(data);
-        setMateriaSeleccionada('aleatorio');
-      });
+        console.log('Estructura:', data);
+        setEstructura(data);
+      })
+      .catch(e => console.error('Error:', e));
   }, []);
 
   const handleGenerar = async () => {
@@ -43,7 +45,13 @@ export default function GenerarSupuesto() {
         });
         data = response.data;
       } else {
-        data = await generarSupuesto(materiaSeleccionada, dificultad, formato);
+        const response = await api.post('/supuestos/generar', {
+          materia_id: materiaSeleccionada,
+          submateria_id: submateriaSeleccionada === 'todas' ? null : submateriaSeleccionada,
+          dificultad,
+          formato,
+        });
+        data = response.data;
       }
       setSupuesto(data);
       setTiempoInicio(Date.now());
@@ -111,15 +119,35 @@ export default function GenerarSupuesto() {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Materia</label>
                 <select
                   value={materiaSeleccionada}
-                  onChange={e => setMateriaSeleccionada(e.target.value)}
+                  onChange={e => {
+                    setMateriaSeleccionada(e.target.value);
+                    setSubmateriaSeleccionada('todas');
+                  }}
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
                 >
                   <option value="aleatorio">🎲 Aleatorio</option>
-                  {materias.map(m => (
+                  {estructura.map(m => (
                     <option key={m.id} value={m.id}>{m.nombre}</option>
                   ))}
                 </select>
               </div>
+
+              {/* Submateria — solo si hay una materia seleccionada con submaterias */}
+              {materiaSeleccionada !== 'aleatorio' && estructura.find(m => m.id === materiaSeleccionada)?.submaterias?.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Submateria</label>
+                  <select
+                    value={submateriaSeleccionada}
+                    onChange={e => setSubmateriaSeleccionada(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                  >
+                    <option value="todas">📚 Todas las submaterias</option>
+                    {estructura.find(m => m.id === materiaSeleccionada)?.submaterias.map(s => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {/* Dificultad */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Dificultad</label>

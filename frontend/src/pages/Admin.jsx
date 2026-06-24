@@ -29,6 +29,10 @@ export default function Admin() {
   const [resultadoIndexacion, setResultadoIndexacion] = useState(null);
   const [creandoBloque, setCreandoBloque] = useState(false);
   const [resultadoBloque, setResultadoBloque] = useState(null);
+  const [submaterias, setSubmaterias] = useState([]);
+  const [materiaSubmateria, setMateriaSubmateria] = useState('');
+  // Estado para todas las submaterias
+  const [todasSubmaterias, setTodasSubmaterias] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -36,17 +40,33 @@ export default function Admin() {
 
   const cargarDatos = async () => {
     try {
-      const [mRes, bRes, sRes] = await Promise.all([
+      const [mRes, bRes, sRes, tsRes] = await Promise.all([
         api.get('/admin/materias'),
         api.get('/admin/bloques'),
-        api.get('/admin/stats')
+        api.get('/admin/stats'),
+        api.get('/admin/submaterias')
       ]);
       setMaterias(mRes.data);
       setBloques(bRes.data);
       setStats(sRes.data);
+      setTodasSubmaterias(tsRes.data);
       if (mRes.data.length > 0 && !nuevoBloqueForm.materia_id) {
-        setNuevoBloqueForm(f => ({ ...f, materia_id: mRes.data[0].id }));
+        const primeraMateria = mRes.data[0].id;
+        setNuevoBloqueForm(f => ({ ...f, materia_id: primeraMateria }));
+        const sRes2 = await api.get(`/admin/submaterias/${primeraMateria}`);
+        setSubmaterias(sRes2.data);
       }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const cargarSubmaterias = async (materiaId) => {
+    if (!materiaId) return;
+    try {
+      const res = await api.get(`/admin/submaterias/${materiaId}`);
+      console.log('Submaterias cargadas:', res.data);
+      setSubmaterias(res.data);
     } catch (e) {
       console.error(e);
     }
@@ -58,6 +78,7 @@ export default function Admin() {
     try {
       const res = await api.post('/admin/bloques', {
         materia_id: nuevoBloqueForm.materia_id,
+        submateria_id: nuevoBloqueForm.submateria_id || null,
         titulo: nuevoBloqueForm.titulo,
         numero_bloque: parseInt(nuevoBloqueForm.numero_bloque),
         normativa_principal: nuevoBloqueForm.normativa_principal
@@ -128,6 +149,7 @@ export default function Admin() {
             { id: 'nuevo', label: 'Crear bloque' },
             { id: 'indexar', label: 'Indexar contenido' },
             { id: 'materia', label: 'Crear materia' },
+            { id: 'submateria', label: 'Crear submateria' },
           ].map(t => (
             <button
               key={t.id}
@@ -156,7 +178,9 @@ export default function Admin() {
                       <p className="text-sm font-medium text-gray-800">
                         Bloque {b.numero_bloque} — {b.titulo}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{b.materia} · {b.chunks} chunks</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {b.materia}{b.submateria ? ` › ${b.submateria}` : ''} · {b.chunks} chunks
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       {b.chunks > 0
@@ -200,14 +224,15 @@ export default function Admin() {
             <h2 className="font-bold text-gray-800 mb-6">Crear nuevo bloque</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Materia</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Submateria (opcional)</label>
                 <select
-                  value={nuevoBloqueForm.materia_id}
-                  onChange={e => setNuevoBloqueForm(f => ({ ...f, materia_id: e.target.value }))}
+                  value={nuevoBloqueForm.submateria_id || ''}
+                  onChange={e => setNuevoBloqueForm(f => ({ ...f, submateria_id: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
                 >
-                  {materias.map(m => (
-                    <option key={m.id} value={m.id}>{m.nombre}</option>
+                  <option value="">— Sin submateria —</option>
+                  {submaterias.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -367,6 +392,119 @@ export default function Admin() {
                 <Plus size={16} />
                 Crear materia
               </button>
+              {/* Materias existentes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Materias existentes</label>
+                {materias.length === 0 ? (
+                  <p className="text-xs text-gray-400">Ninguna todavía</p>
+                ) : (
+                  <div className="space-y-2">
+                    {materias.map(m => (
+                      <div key={m.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2">
+                        <span className="text-sm text-gray-700 font-medium">{m.nombre}</span>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`¿Eliminar "${m.nombre}"?`)) return;
+                            try {
+                              await api.delete(`/admin/materias/${m.id}`);
+                              await cargarDatos();
+                            } catch (e) {
+                              alert('Error eliminando la materia. Puede que tenga bloques asociados.');
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'submateria' && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-bold text-gray-800 mb-6">Crear nueva submateria</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Materia</label>
+                <select
+                  value={materiaSubmateria}
+                  onChange={e => {
+                    setMateriaSubmateria(e.target.value);
+                    cargarSubmaterias(e.target.value);
+                  }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                >
+                  <option value="">— Selecciona materia —</option>
+                  {materias.map(m => (
+                    <option key={m.id} value={m.id}>{m.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                <input
+                  type="text"
+                  id="submateria-nombre"
+                  placeholder="Ej: Animales Potencialmente Peligrosos"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <input
+                  type="text"
+                  id="submateria-descripcion"
+                  placeholder="Ej: Normativa sobre tenencia de animales peligrosos"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-policial-azul"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const nombre = document.getElementById('submateria-nombre').value;
+                  const descripcion = document.getElementById('submateria-descripcion').value;
+                  if (!materiaSubmateria || !nombre) return;
+                  await api.post('/admin/submaterias', { materia_id: materiaSubmateria, nombre, descripcion });
+                  alert(`Submateria "${nombre}" creada`);
+                  cargarSubmaterias(materiaSubmateria);
+                  await cargarDatos();
+                }}
+                className="w-full bg-policial-azul text-white font-bold py-3 rounded-xl hover:bg-policial-azulMedio transition-colors"
+              >
+                Crear submateria
+              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Submaterias existentes</label>
+                {todasSubmaterias.length === 0 ? (
+                  <p className="text-xs text-gray-400">Ninguna todavía</p>
+                ) : (
+                  <div className="space-y-2">
+                    {todasSubmaterias.map(s => (
+                      <div key={s.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2">
+                        <div>
+                          <span className="text-sm text-gray-700 font-medium">{s.nombre}</span>
+                          <span className="text-xs text-gray-400 ml-2">· {s.materia}</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`¿Eliminar "${s.nombre}"?`)) return;
+                            await api.delete(`/admin/submaterias/${s.id}`);
+                            const tsRes = await api.get('/admin/submaterias');
+                            setTodasSubmaterias(tsRes.data);
+                          }}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

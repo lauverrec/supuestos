@@ -154,15 +154,24 @@ async def indexar_bloque(db: Session, bloque_id: str, contenido: str) -> dict:
         db.rollback()
         return {"ok": False, "error": str(e)}
 
-async def recuperar_chunks(db: Session, materia_id: str, limite: int = 10) -> list[str]:
+async def recuperar_chunks(db: Session, materia_id: str, submateria_id: str = None, limite: int = 10) -> list[str]:
     """Recupera chunks de forma aleatoria y proporcional entre todos los bloques."""
     try:
-        # Obtener todos los bloques activos de la materia
-        bloques = db.execute(
-            text("""SELECT id FROM bloques 
-                   WHERE materia_id = :materia_id AND activo = true"""),
-            {"materia_id": materia_id}
-        ).fetchall()
+        # Filtrar por submateria si se proporciona
+        if submateria_id:
+            bloques = db.execute(
+                text("""SELECT id FROM bloques 
+                       WHERE materia_id = :materia_id 
+                       AND submateria_id = :submateria_id
+                       AND activo = true"""),
+                {"materia_id": materia_id, "submateria_id": submateria_id}
+            ).fetchall()
+        else:
+            bloques = db.execute(
+                text("""SELECT id FROM bloques 
+                       WHERE materia_id = :materia_id AND activo = true"""),
+                {"materia_id": materia_id}
+            ).fetchall()
 
         if not bloques:
             return []
@@ -170,7 +179,6 @@ async def recuperar_chunks(db: Session, materia_id: str, limite: int = 10) -> li
         import random
         bloques_lista = [b[0] for b in bloques]
         
-        # Seleccionar aleatoriamente entre 2 y 4 bloques diferentes
         num_bloques = min(random.randint(2, 4), len(bloques_lista))
         bloques_seleccionados = random.sample(bloques_lista, num_bloques)
         

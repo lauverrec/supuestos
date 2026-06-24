@@ -46,11 +46,15 @@ async def crear_materia(request: CrearMateriaRequest, db: Session = Depends(get_
 @router.get("/bloques")
 async def listar_bloques(db: Session = Depends(get_db)):
     result = db.execute(
-        text("""SELECT b.id, b.titulo, b.numero_bloque, b.activo, m.nombre as materia,
-               (SELECT COUNT(*) FROM chunks c WHERE c.bloque_id = b.id) as chunks
+        text("""SELECT b.id, b.titulo, b.numero_bloque, b.activo, 
+                       m.nombre as materia, s.nombre as submateria,
+                       COUNT(c.id) as chunks
                FROM bloques b
                JOIN materias m ON b.materia_id = m.id
-               ORDER BY b.numero_bloque""")
+               LEFT JOIN submaterias s ON b.submateria_id = s.id
+               LEFT JOIN chunks c ON c.bloque_id = b.id
+               GROUP BY b.id, b.titulo, b.numero_bloque, b.activo, m.nombre, s.nombre
+               ORDER BY m.nombre, s.nombre, b.numero_bloque""")
     ).fetchall()
     return [
         {
@@ -59,27 +63,28 @@ async def listar_bloques(db: Session = Depends(get_db)):
             "numero_bloque": r[2],
             "activo": r[3],
             "materia": r[4],
-            "chunks": r[5]
+            "submateria": r[5],
+            "chunks": r[6]
         }
         for r in result
     ]
 
 @router.post("/bloques")
-async def crear_bloque(request: CrearBloqueRequest, db: Session = Depends(get_db)):
-    bloque_id = str(uuid.uuid4())
-    db.execute(
-        text("""INSERT INTO bloques (id, materia_id, titulo, numero_bloque, normativa_principal)
-               VALUES (:id, :materia_id, :titulo, :numero_bloque, :normativa_principal)"""),
+async def crear_bloque(data: dict, db: Session = Depends(get_db)):
+    result = db.execute(
+        text("""INSERT INTO bloques (id, materia_id, submateria_id, titulo, numero_bloque, normativa_principal)
+                VALUES (gen_random_uuid(), :materia_id, :submateria_id, :titulo, :numero_bloque, :normativa_principal)
+                RETURNING id, titulo"""),
         {
-            "id": bloque_id,
-            "materia_id": request.materia_id,
-            "titulo": request.titulo,
-            "numero_bloque": request.numero_bloque,
-            "normativa_principal": request.normativa_principal
+            "materia_id": data["materia_id"],
+            "submateria_id": data.get("submateria_id"),
+            "titulo": data["titulo"],
+            "numero_bloque": data.get("numero_bloque", 1),
+            "normativa_principal": data.get("normativa_principal", [])
         }
-    )
+    ).fetchone()
     db.commit()
-    return {"id": bloque_id, "titulo": request.titulo}
+    return {"id": str(result[0]), "titulo": result[1]}
 
 @router.post("/bloques/indexar")
 async def indexar_bloque(request: IndexarBloqueRequest, db: Session = Depends(get_db)):
@@ -117,3 +122,83 @@ async def borrar_bloque(bloque_id: str, db: Session = Depends(get_db)):
     db.execute(text("DELETE FROM bloques WHERE id = :id"), {"id": bloque_id})
     db.commit()
     return {"ok": True, "mensaje": "Bloque eliminado"}
+
+# GET submaterias por materia
+@router.get("/submaterias/{materia_id}")
+async def listar_submaterias(materia_id: str, db: Session = Depends(get_db)):
+    result = db.execute(
+        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, m.nombre as materia
+               FROM submaterias s
+               JOIN materias m ON s.materia_id = m.id
+               WHERE s.materia_id = :materia_id 
+               ORDER BY s.orden"""),
+        {"materia_id": materia_id}
+    ).fetchall()
+    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia": r[4]} for r in result]
+
+@router.get("/submaterias")
+async def listar_todas_submaterias(db: Session = Depends(get_db)):
+    result = db.execute(
+        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, m.nombre as materia
+               FROM submaterias s
+               JOIN materias m ON s.materia_id = m.id
+               ORDER BY m.nombre, s.orden""")
+    ).fetchall()
+    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia": r[4]} for r in result]
+
+# POST crear submateria
+@router.post("/submaterias")
+async def crear_submateria(data: dict, db: Session = Depends(get_db)):
+    result = db.execute(
+        text("""INSERT INTO submaterias (id, materia_id, nombre, descripcion, orden)
+                VALUES (gen_random_uuid(), :materia_id, :nombre, :descripcion, :orden)
+                RETURNING id, nombre"""),
+        {
+            "materia_id": data["materia_id"],
+            "nombre": data["nombre"],
+            "descripcion": data.get("descripcion", ""),
+            "orden": data.get("orden", 1)
+        }
+    ).fetchone()
+    db.commit()
+    return {"id": str(result[0]), "nombre": result[1]}
+
+# DELETE submateria
+@router.delete("/submaterias/{submateria_id}")
+async def eliminar_submateria(submateria_id: str, db: Session = Depends(get_db)):
+    db.execute(text("DELETE FROM submaterias WHERE id = :id"), {"id": submateria_id})
+    db.commit()
+    return {"ok": True}
+
+@router.delete("/materias/{materia_id}")
+async def eliminar_materia(materia_id: str, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM materias WHERE id = :id"), {"id": materia_id})
+        db.commit()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="No se puede eliminar — tiene bloques asociados")
+    
+@router.get("/estructura-materias")
+async def estructura_materias(db: Session = Depends(get_db)):
+    materias = db.execute(
+        text("SELECT id, nombre FROM materias ORDER BY orden")
+    ).fetchall()
+    
+    resultado = []
+    for m in materias:
+        submaterias = db.execute(
+            text("""SELECT s.id, s.nombre 
+                   FROM submaterias s
+                   WHERE s.materia_id = :materia_id 
+                   ORDER BY s.orden"""),
+            {"materia_id": m[0]}
+        ).fetchall()
+        
+        resultado.append({
+            "id": str(m[0]),
+            "nombre": m[1],
+            "submaterias": [{"id": str(s[0]), "nombre": s[1]} for s in submaterias]
+        })
+    
+    return resultado

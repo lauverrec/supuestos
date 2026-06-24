@@ -12,6 +12,7 @@ router = APIRouter()
 
 class GenerarRequest(BaseModel):
     materia_id: str
+    submateria_id: str = None
     dificultad: int = 2
     formato: str = "desarrollo"
 
@@ -27,7 +28,7 @@ async def test():
 @router.post("/generar")
 async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db), clerk_id: str = Depends(get_current_user)):
     
-    chunks = await rag_service.recuperar_chunks(db, request.materia_id)
+    chunks = await rag_service.recuperar_chunks(db, request.materia_id, request.submateria_id)
     print(f"Chunks recuperados: {len(chunks)}")
     if chunks:
         print(f"Primer chunk: {chunks[0][:200]}")
