@@ -8,18 +8,26 @@ load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 def get_system_prompt(materia: str) -> str:
-    return f"""Eres un sistema experto en oposiciones a Policía Local de Andalucía, 
+    return f"""Eres un sistema experto en oposiciones a Policía Local de Andalucía,
 especializado en la generación y corrección de supuestos prácticos de examen en la materia: {materia}.
 
 REGLAS ABSOLUTAS — NUNCA las incumplas:
-1. NUNCA inventes artículos, normas o sanciones. 
+1. NUNCA inventes artículos, normas, cuantías, puntos ni penas.
    Usa EXCLUSIVAMENTE la normativa del contexto que se te proporcione.
-2. Las sanciones siempre con céntimos exactos. 
-   Ejemplo correcto: 300,51 € / Ejemplo incorrecto: "300 euros"
-3. Siempre indica el órgano sancionador con su precepto exacto.
-4. Si una infracción no está en el contexto proporcionado, no la incluyas.
-5. Es preferible un supuesto con menos infracciones que uno con artículos incorrectos.
-6. Responde siempre en JSON válido, sin texto adicional, sin markdown, sin explicaciones."""
+2. CUANTÍAS: solo indica un importe si aparece TEXTUALMENTE en el contexto.
+   - Si el contexto marca la cuantía como pendiente (aparece "[VIG]", "pendiente", "pte cotejo" o similar), o NO la da,
+     entonces el campo "sancion_impuesta", "sancion_min" y "sancion_max" van a null, y en "justificacion_sancion"
+     escribes: "Cuantía pendiente de cotejo según LSV/RGC consolidados (no consta en el material)".
+   - JAMÁS rellenes un importe aproximado o de memoria. Es preferible null que un número inventado.
+3. DELITOS: nunca afirmes que un delito está "consumado" ni impongas penas salvo que la pena conste TEXTUALMENTE en el contexto.
+   Los hechos con apariencia delictiva se exponen como ATRIBUCIÓN INDICIARIA: "indicios del delito del art. X",
+   con instrucción de las diligencias correspondientes, NUNCA como condena cerrada.
+4. PREFERENCIA PENAL: si el contexto indica que la vía penal es preferente o que la infracción administrativa queda
+   supeditada/desplazada por la penal, NO propongas además denuncia administrativa por los mismos hechos.
+5. Si una infracción, artículo o dato no está en el contexto, no lo incluyas.
+6. Es SIEMPRE preferible un supuesto con menos infracciones que uno con datos incorrectos o inventados.
+7. Indica el órgano sancionador solo si su precepto consta en el contexto.
+8. Responde siempre en JSON válido, sin texto adicional, sin markdown, sin explicaciones."""
 
 def parsear_json(texto: str) -> dict:
     """Parsea JSON limpiando posibles markdown fences."""
@@ -28,41 +36,51 @@ def parsear_json(texto: str) -> dict:
     return json.loads(texto)
 
 def validar_articulos(solucion_modelo: dict, chunks: list[str]) -> dict:
-    """Valida que los artículos del supuesto existen en los chunks."""
+    """Valida que los artículos e importes del supuesto existen en los chunks."""
     import re
-    
     contexto = " ".join(chunks).lower()
-    solucion_texto = json.dumps(solucion_modelo).lower()
-    
+    solucion_texto = json.dumps(solucion_modelo, ensure_ascii=False).lower()
+
+    # --- Artículos ---
     articulos_supuesto = re.findall(r'art[íi]culo\s+\d+[\w.]*|art\.\s*\d+[\w.]*', solucion_texto)
     articulos_supuesto = list(set(articulos_supuesto))
-    
     problematicos = []
     for art in articulos_supuesto:
         art_normalizado = art.replace("artículo", "art.").replace("articulo", "art.").strip()
         numero = re.search(r'\d+', art_normalizado)
         if numero and numero.group() not in contexto:
             problematicos.append(art)
-    
+
+    # --- Importes en euros: cada cuantía citada debe aparecer en el contexto ---
+    importes_problematicos = []
+    importes = re.findall(r'(\d{1,3}(?:[.,]\d{2})?)\s*(?:€|euros?)', solucion_texto)
+    for imp in set(importes):
+        # normaliza separadores para buscar la cifra en el contexto
+        cifra = imp.replace('.', '').replace(',', '')
+        contexto_norm = contexto.replace('.', '').replace(',', '')
+        if cifra and cifra not in contexto_norm:
+            importes_problematicos.append(imp)
+
     return {
-        "valido": len(problematicos) == 0,
-        "articulos_problematicos": problematicos
+        "valido": len(problematicos) == 0 and len(importes_problematicos) == 0,
+        "articulos_problematicos": problematicos,
+        "importes_problematicos": importes_problematicos
     }
 
 async def generar_supuesto(chunks: list[str], materia: str, dificultad: int, formato: str) -> dict:
     """Genera un supuesto práctico basado en los chunks RAG."""
-    
+
     contexto = "\n\n---\n\n".join(chunks)
-    
+
     instrucciones_dificultad = {
           1: """NIVEL BÁSICO:
-      - Genera entre 3 y 5 infracciones en total
+      - Genera hasta 5 infracciones en total
       - Infracciones claramente identificables, sin ambigüedad
       - Situación sencilla con un único tipo de establecimiento
       - Sin preguntas teóricas adicionales
       - Circunstancias simples y directas""",
           2: f"""NIVEL MEDIO:
-      - Genera entre 6 y 7 infracciones en total
+      - Genera hasta 7 infracciones en total
       - Al menos 2 infracciones de calificación GRAVE o MUY GRAVE
       - Puede incluir concurrencia de normativas distintas
       - Circunstancias con algún elemento que requiera análisis
@@ -71,7 +89,7 @@ async def generar_supuesto(chunks: list[str], materia: str, dificultad: int, for
         PREGUNTAS:
         1. ¿texto de la pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}""",
           3: f"""NIVEL AVANZADO:
-      - Genera entre 8 y 10 infracciones en total
+      - Genera hasta 10 infracciones en total
       - Al menos 3 o 4 infracciones de calificación MUY GRAVE
       - Obligatorio incluir concurrencia de varias normativas distintas
       - Circunstancias complejas con múltiples sujetos infractores
@@ -102,15 +120,35 @@ FORMATO DEL ENUNCIADO:
   1. ¿texto de la pregunta?
   2. ¿texto de la pregunta?
 
+ESTRUCTURA DE LA SOLUCIÓN (esquema de examen de 5 puntos):
+1. hechos_relevantes: extrae del supuesto los hechos jurídicamente relevantes, en frases breves.
+2. infracciones: administrativas, con precepto, responsable, calificación, órgano y sanción CUANDO PROCEDA.
+3. indicios_penales: ilícitos penales como INDICIOS y presunto autor, nunca como condena.
+4. actuacion_policial: actuación completa (aseguramiento, asistencia, pruebas, diligencias, inmovilización, documentación).
+5. respuesta_teorica: si el enunciado incluye PREGUNTAS, respóndelas de forma desarrollada citando artículos del contexto.
+
 IMPORTANTE SOBRE LAS SANCIONES:
-Para cada infracción fija una sanción concreta (sancion_impuesta) dentro del rango legal.
-Ten en cuenta las circunstancias del supuesto para graduarla.
-Expresa siempre con céntimos exactos: 450,51 € no "unos 450 euros".
+- Solo indica un importe si aparece TEXTUALMENTE en el contexto normativo de arriba.
+- Si el contexto marca la cuantía como "[VIG]", "pendiente" o no la da, pon sancion_min, sancion_max
+  y sancion_impuesta a null, y en justificacion_sancion escribe:
+  "Cuantía pendiente de cotejo según LSV/RGC (no consta en el material)".
+- NUNCA inventes ni aproximes un importe de memoria. Mejor null que un número no respaldado.
+
+IMPORTANTE SOBRE LOS DELITOS:
+- Si hay hechos con apariencia delictiva, NO los pongas en "infracciones".
+  Inclúyelos en "indicios_penales" como atribución indiciaria, sin penas (salvo que la pena conste textual en el contexto)
+  y con la diligencia policial que corresponda. Nunca los des por "consumados".
+- Si el contexto dice que la vía penal desplaza o supedita la administrativa, no dupliques con denuncia administrativa.
+
+IMPORTANTE SOBRE LA ACTUACIÓN POLICIAL Y LA RESPUESTA TEÓRICA:
+- En "actuacion_policial", incluye solo los apartados que procedan según los hechos; omite los que no apliquen.
+- En "respuesta_teorica", cita únicamente artículos que estén en el contexto. Si no hay preguntas, deja el array vacío.
 
 Devuelve SOLO este JSON:
 {{
   "enunciado": "texto del supuesto como aparecería en un examen real",
   "solucion_modelo": {{
+    "hechos_relevantes": [],
     "consideracion_previa": {{
       "tipo_establecimiento": "",
       "hora": "",
@@ -123,20 +161,36 @@ Devuelve SOLO este JSON:
         "norma": "",
         "calificacion": "LEVE|GRAVE|MUY GRAVE",
         "precepto": "art. X Ley Y",
-        "sancion_min": 0.00,
-        "sancion_max": 0.00,
-        "sancion_impuesta": 0.00,
+        "responsable": "",
+        "sancion_min": null,
+        "sancion_max": null,
+        "sancion_impuesta": null,
         "justificacion_sancion": "razonamiento de por qué se impone esta cuantía concreta",
         "organo_sancionador": "",
         "precepto_organo": "art. X Ley Y"
       }}
     ],
-    "actuacion_policial": [],
-    "documentacion": [
+    "indicios_penales": [
       {{
-        "documento": "",
-        "organismo_destino": ""
+        "descripcion": "",
+        "tipo_penal_indiciario": "indicios del delito del art. X (no consumado)",
+        "presunto_autor": "",
+        "diligencias": "",
+        "preferencia_penal": true
       }}
+    ],
+    "actuacion_policial": {{
+      "aseguramiento_escena": "",
+      "asistencia": "",
+      "pruebas": "",
+      "diligencias": "",
+      "inmovilizacion": "",
+      "documentacion": [
+        {{"documento": "", "organismo_destino": ""}}
+      ]
+    }},
+    "respuesta_teorica": [
+      {{"pregunta": "", "respuesta": "", "articulos": []}}
     ],
     "sin_infraccion": false
   }}
@@ -153,16 +207,16 @@ Devuelve SOLO este JSON:
                 system=get_system_prompt(materia),
                 messages=[{"role": "user", "content": prompt}]
             )
-            
+
             resultado = parsear_json(response.content[0].text)
-            
+
             validacion = validar_articulos(resultado["solucion_modelo"], chunks)
             if validacion["valido"]:
                 return {"ok": True, "datos": resultado}
             else:
                 print(f"Intento {intento + 1}: artículos problemáticos: {validacion['articulos_problematicos']}")
                 prompt += f"\n\nADVERTENCIA: No uses estos artículos, no están en el contexto: {validacion['articulos_problematicos']}"
-                
+
         except Exception as e:
             ultimo_error = str(e)
             print(f"Intento {intento + 1} fallido: {e}")
@@ -170,13 +224,13 @@ Devuelve SOLO este JSON:
     return {"ok": False, "error": ultimo_error, "usar_banco": True}
 
 async def corregir_respuesta(respuesta_usuario: str, solucion_modelo: dict, materia: str, dificultad: int = 2, chunks_originales: list = []) -> dict:
-    
+
     contexto_normativo = "\n\n---\n\n".join(chunks_originales) if chunks_originales else ""
-    
+
     criterios_dificultad = {
         1: "Nivel básico: valora que el opositor identifique al menos 3 de las infracciones presentes, con su calificación y órgano sancionador.",
-        2: "Nivel medio: valora que el opositor identifique al menos 5 infracciones, cite los preceptos exactos, las sanciones con céntimos y los órganos sancionadores correctos.",
-        3: "Nivel avanzado: exige identificación completa de todas las infracciones, preceptos exactos, sanciones con céntimos, órganos sancionadores, actuación policial detallada, documentación generada y respuesta a las preguntas teóricas."
+        2: "Nivel medio: valora que el opositor identifique al menos 5 infracciones, cite los preceptos exactos y los órganos sancionadores correctos.",
+        3: "Nivel avanzado: exige identificación completa de todas las infracciones, preceptos exactos, órganos sancionadores, actuación policial detallada, documentación generada y respuesta a las preguntas teóricas."
     }
 
     prompt = f"""MATERIA DEL EXAMEN: {materia}
@@ -192,12 +246,20 @@ RESPUESTA DEL OPOSITOR:
 {respuesta_usuario}
 
 REGLAS ABSOLUTAS DE CORRECCIÓN — NUNCA LAS INCUMPLAS:
-1. SOLO puedes citar artículos, sanciones y órganos que aparezcan en la NORMATIVA DE REFERENCIA o en la SOLUCIÓN MODELO.
+1. SOLO puedes citar artículos, sanciones, puntos, plazos y órganos que aparezcan TEXTUALMENTE en la NORMATIVA DE REFERENCIA o en la SOLUCIÓN MODELO.
 2. Si el opositor cita algo que NO aparece en la normativa de referencia ni en la solución modelo, márcalo como ERROR.
-3. Si tú mismo necesitas citar algo para la corrección y NO está en la normativa de referencia, NO lo cites. Escribe "No verificable con la normativa disponible".
-4. NUNCA inventes artículos, sanciones ni órganos sancionadores que no estén en la normativa de referencia.
-5. Es preferible una corrección incompleta que una corrección con datos inventados.
-6. La solución modelo es la referencia de verdad absoluta — si el opositor coincide con ella, es correcto.
+3. NUNCA inventes ni aproximes de memoria ningún dato (artículo, importe, puntos, plazo de prescripción, órgano, medida).
+4. Es preferible una corrección incompleta que una corrección con datos inventados.
+5. La solución modelo es la referencia de verdad absoluta — si el opositor coincide con ella, es correcto.
+
+FICHA TÉCNICA POR INFRACCIÓN (campo "ficha_tecnica"):
+Para CADA infracción relevante del supuesto, construye una ficha con estos campos:
+  normativa, articulo_completo, precepto, sancion, responsable, organo_competente,
+  detraccion_puntos, medidas_provisionales, prescripcion.
+REGLA DE ORO de la ficha: incluye ÚNICAMENTE los campos cuyo dato conste TEXTUALMENTE en la normativa de referencia
+o en la solución modelo. Si un dato NO consta, OMITE ESE CAMPO por completo (no lo escribas, no pongas "pendiente",
+no pongas null, no pongas "no consta"). Una ficha con 4 campos verídicos es correcta; una con 9 campos inventados es un error grave.
+Prefiere exactitud a completitud.
 
 Actúa como tribunal de oposiciones de {materia} experimentado. Sé preciso, justo y didáctico.
 
@@ -205,6 +267,20 @@ Devuelve SOLO este JSON:
 {{
   "puntuacion": 0.00,
   "resumen": "valoración general en 2-3 frases",
+  "ficha_tecnica": [
+    {{
+      "infraccion": "nombre de la infracción",
+      "normativa": "solo si consta",
+      "articulo_completo": "solo si consta",
+      "precepto": "solo si consta",
+      "sancion": "solo si consta",
+      "responsable": "solo si consta",
+      "organo_competente": "solo si consta",
+      "detraccion_puntos": "solo si consta",
+      "medidas_provisionales": "solo si consta",
+      "prescripcion": "solo si consta"
+    }}
+  ],
   "infracciones_correctas": [
     {{"infraccion": "", "observacion": ""}}
   ],
@@ -212,7 +288,6 @@ Devuelve SOLO este JSON:
     {{
       "infraccion": "",
       "precepto_correcto": "",
-      "sancion_correcta": "",
       "organo_correcto": "",
       "explicacion": ""
     }}
@@ -237,7 +312,9 @@ Devuelve SOLO este JSON:
   "puntos_fuertes": [],
   "puntos_debiles": [],
   "consejo_estudio": "qué bloque o normativa repasar"
-}}"""
+}}
+
+RECORDATORIO FINAL: en "ficha_tecnica", omite todo campo cuyo dato no esté textualmente en la normativa de referencia o la solución modelo. No inventes para rellenar."""
 
     try:
         response = client.messages.create(

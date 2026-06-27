@@ -12,7 +12,7 @@ router = APIRouter()
 
 class GenerarRequest(BaseModel):
     materia_id: str
-    submateria_id: str = None
+    submateria_id: str | None = None
     dificultad: int = 2
     formato: str = "desarrollo"
 

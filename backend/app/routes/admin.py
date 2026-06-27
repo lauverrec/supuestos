@@ -46,14 +46,15 @@ async def crear_materia(request: CrearMateriaRequest, db: Session = Depends(get_
 @router.get("/bloques")
 async def listar_bloques(db: Session = Depends(get_db)):
     result = db.execute(
-        text("""SELECT b.id, b.titulo, b.numero_bloque, b.activo, 
+        text("""SELECT b.id, b.titulo, b.numero_bloque, b.activo,
+                       b.materia_id, b.submateria_id,
                        m.nombre as materia, s.nombre as submateria,
                        COUNT(c.id) as chunks
                FROM bloques b
                JOIN materias m ON b.materia_id = m.id
                LEFT JOIN submaterias s ON b.submateria_id = s.id
                LEFT JOIN chunks c ON c.bloque_id = b.id
-               GROUP BY b.id, b.titulo, b.numero_bloque, b.activo, m.nombre, s.nombre
+               GROUP BY b.id, b.titulo, b.numero_bloque, b.activo, b.materia_id, b.submateria_id, m.nombre, s.nombre
                ORDER BY m.nombre, s.nombre, b.numero_bloque""")
     ).fetchall()
     return [
@@ -62,9 +63,11 @@ async def listar_bloques(db: Session = Depends(get_db)):
             "titulo": r[1],
             "numero_bloque": r[2],
             "activo": r[3],
-            "materia": r[4],
-            "submateria": r[5],
-            "chunks": r[6]
+            "materia_id": str(r[4]) if r[4] else None,
+            "submateria_id": str(r[5]) if r[5] else None,
+            "materia": r[6],
+            "submateria": r[7],
+            "chunks": r[8]
         }
         for r in result
     ]
@@ -127,24 +130,24 @@ async def borrar_bloque(bloque_id: str, db: Session = Depends(get_db)):
 @router.get("/submaterias/{materia_id}")
 async def listar_submaterias(materia_id: str, db: Session = Depends(get_db)):
     result = db.execute(
-        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, m.nombre as materia
+        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, s.materia_id, m.nombre as materia
                FROM submaterias s
                JOIN materias m ON s.materia_id = m.id
                WHERE s.materia_id = :materia_id 
                ORDER BY s.orden"""),
         {"materia_id": materia_id}
     ).fetchall()
-    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia": r[4]} for r in result]
+    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia_id": str(r[4]), "materia": r[5]} for r in result]
 
 @router.get("/submaterias")
 async def listar_todas_submaterias(db: Session = Depends(get_db)):
     result = db.execute(
-        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, m.nombre as materia
+        text("""SELECT s.id, s.nombre, s.descripcion, s.orden, s.materia_id, m.nombre as materia
                FROM submaterias s
                JOIN materias m ON s.materia_id = m.id
                ORDER BY m.nombre, s.orden""")
     ).fetchall()
-    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia": r[4]} for r in result]
+    return [{"id": str(r[0]), "nombre": r[1], "descripcion": r[2], "orden": r[3], "materia_id": str(r[4]), "materia": r[5]} for r in result]
 
 # POST crear submateria
 @router.post("/submaterias")
@@ -178,27 +181,24 @@ async def eliminar_materia(materia_id: str, db: Session = Depends(get_db)):
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail="No se puede eliminar — tiene bloques asociados")
-    
+
 @router.get("/estructura-materias")
 async def estructura_materias(db: Session = Depends(get_db)):
     materias = db.execute(
         text("SELECT id, nombre FROM materias ORDER BY orden")
     ).fetchall()
-    
     resultado = []
     for m in materias:
         submaterias = db.execute(
-            text("""SELECT s.id, s.nombre 
-                   FROM submaterias s
-                   WHERE s.materia_id = :materia_id 
-                   ORDER BY s.orden"""),
-            {"materia_id": m[0]}
+            text("""SELECT id, nombre FROM submaterias
+                    WHERE materia_id = :mid ORDER BY orden"""),
+            {"mid": str(m[0])}
         ).fetchall()
-        
         resultado.append({
             "id": str(m[0]),
             "nombre": m[1],
-            "submaterias": [{"id": str(s[0]), "nombre": s[1]} for s in submaterias]
+            "submaterias": [
+                {"id": str(s[0]), "nombre": s[1]} for s in submaterias
+            ]
         })
-    
     return resultado
