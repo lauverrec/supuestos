@@ -272,7 +272,7 @@ async def detalle_supuesto(supuesto_id: str, db: Session = Depends(get_db)):
     }
 
 @router.post("/generar/aleatorio")
-async def generar_supuesto_aleatorio(request: GenerarRequest, db: Session = Depends(get_db)):
+async def generar_supuesto_aleatorio(request: GenerarRequest, db: Session = Depends(get_db), clerk_id: str = Depends(get_current_user)):
     
     # Obtener materias que tienen chunks indexados
     materias_con_chunks = db.execute(
@@ -288,4 +288,4 @@ async def generar_supuesto_aleatorio(request: GenerarRequest, db: Session = Depe
     materia_id = random.choice(materias_con_chunks)[0]
     request.materia_id = str(materia_id)
     
-    return await generar_supuesto(request, db)
+    return await generar_supuesto(request, db, clerk_id)

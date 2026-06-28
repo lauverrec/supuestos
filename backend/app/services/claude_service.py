@@ -256,6 +256,10 @@ FICHA TÉCNICA POR INFRACCIÓN (campo "ficha_tecnica"):
 Para CADA infracción relevante del supuesto, construye una ficha con estos campos:
   normativa, articulo_completo, precepto, sancion, responsable, organo_competente,
   detraccion_puntos, medidas_provisionales, prescripcion.
+CAMPO articulo_completo: pon la referencia del artículo (ej. "art. 76 LSV") y, SOLO SI el texto literal del artículo
+consta TEXTUALMENTE en la normativa de referencia, añádelo a continuación tras un guion. Formato:
+"art. 76 LSV — [texto literal tal como aparece en el material]". Si el texto literal NO está en los chunks,
+incluye solo la referencia. NUNCA reproduzcas de memoria el texto de un artículo que no esté en el material.
 REGLA DE ORO de la ficha: incluye ÚNICAMENTE los campos cuyo dato conste TEXTUALMENTE en la normativa de referencia
 o en la solución modelo. Si un dato NO consta, OMITE ESE CAMPO por completo (no lo escribas, no pongas "pendiente",
 no pongas null, no pongas "no consta"). Una ficha con 4 campos verídicos es correcta; una con 9 campos inventados es un error grave.
@@ -271,7 +275,7 @@ Devuelve SOLO este JSON:
     {{
       "infraccion": "nombre de la infracción",
       "normativa": "solo si consta",
-      "articulo_completo": "solo si consta",
+      "articulo_completo": "art. X Ley Y — texto literal del artículo si consta en el material",
       "precepto": "solo si consta",
       "sancion": "solo si consta",
       "responsable": "solo si consta",

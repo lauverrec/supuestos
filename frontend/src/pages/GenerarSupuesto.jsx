@@ -222,7 +222,7 @@ export default function GenerarSupuesto() {
         {fase === 'generando' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
             <Loader2 size={48} className="text-policial-azul animate-spin mx-auto mb-4" />
-            <p className="text-gray-600 font-medium">Generando supuesto con IA...</p>
+            <p className="text-gray-600 font-medium">Generando supuesto...</p>
             <p className="text-gray-400 text-sm mt-1">Esto puede tardar unos segundos</p>
           </div>
         )}
@@ -346,7 +346,7 @@ export default function GenerarSupuesto() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
             <Loader2 size={48} className="text-policial-azul animate-spin mx-auto mb-4" />
             <p className="text-gray-600 font-medium">Corrigiendo tu respuesta...</p>
-            <p className="text-gray-400 text-sm mt-1">La IA está analizando tu respuesta en detalle</p>
+            <p className="text-gray-400 text-sm mt-1">Analizando tu respuesta en detalle</p>
           </div>
         )}
 
