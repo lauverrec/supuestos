@@ -79,7 +79,7 @@ export default function Correccion() {
 
         {/* Puntuación */}
         <div className={`rounded-2xl border p-6 ${bgPuntuacion}`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-1">Puntuación obtenida</p>
               <p className={`text-5xl font-bold ${colorPuntuacion}`}>
@@ -89,7 +89,7 @@ export default function Correccion() {
                 <p className="text-sm text-gray-500 mt-1">{feedback.correctas} de {feedback.total} preguntas correctas</p>
               )}
             </div>
-            <Link to="/generar" className="flex items-center gap-2 bg-policial-azul text-white font-bold px-5 py-3 rounded-xl hover:bg-policial-azulMedio transition-colors text-sm">
+            <Link to="/generar" className="flex items-center justify-center gap-2 bg-policial-azul text-white font-bold px-5 py-3 rounded-xl hover:bg-policial-azulMedio transition-colors text-sm shrink-0">
               <PlusCircle size={16} /> Nuevo supuesto
             </Link>
           </div>
@@ -282,12 +282,12 @@ export default function Correccion() {
                 )}
 
                 {/* Consideración previa */}
-                {sm.consideracion_previa && (sm.consideracion_previa.tipo_establecimiento || sm.consideracion_previa.hora) && (
+                {sm.consideracion_previa && (sm.consideracion_previa.datos_contexto?.length > 0 || sm.consideracion_previa.hora) && (
                   <div className="mb-6 bg-gray-50 rounded-xl p-4">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Consideración previa</p>
-                    {sm.consideracion_previa.tipo_establecimiento && (
-                      <p className="text-sm text-gray-700"><span className="font-medium">Establecimiento:</span> {sm.consideracion_previa.tipo_establecimiento}</p>
-                    )}
+                    {sm.consideracion_previa.datos_contexto?.map((d, i) => (
+                      d.valor && <p key={i} className="text-sm text-gray-700"><span className="font-medium">{d.etiqueta}:</span> {d.valor}</p>
+                    ))}
                     {sm.consideracion_previa.hora && (
                       <p className="text-sm text-gray-700"><span className="font-medium">Hora:</span> {sm.consideracion_previa.hora}</p>
                     )}

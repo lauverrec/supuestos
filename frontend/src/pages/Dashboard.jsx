@@ -21,14 +21,14 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto px-4 py-8">
 
         {/* Bienvenida */}
-        <div className="bg-policial-azul text-white rounded-2xl p-6 mb-8 flex items-center justify-between">
+        <div className="bg-policial-azul text-white rounded-2xl p-6 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold mb-1">Panel de estudio</h1>
             <p className="text-blue-200 text-sm">Policía Administrativa — Espectáculos Públicos Andalucía</p>
           </div>
           <Link
             to="/generar"
-            className="flex items-center gap-2 bg-white text-policial-azul font-bold px-5 py-3 rounded-xl hover:bg-blue-50 transition-colors"
+            className="flex items-center justify-center gap-2 bg-white text-policial-azul font-bold px-5 py-3 rounded-xl hover:bg-blue-50 transition-colors shrink-0"
           >
             <PlusCircle size={18} />
             Nuevo supuesto

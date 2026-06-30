@@ -27,8 +27,27 @@ async def test():
 
 @router.post("/generar")
 async def generar_supuesto(request: GenerarRequest, db: Session = Depends(get_db), clerk_id: str = Depends(get_current_user)):
+    # Construir consulta temática para la búsqueda por similitud (Voyage)
+    consulta_partes = []
+    nombre_mat = db.execute(
+        text("SELECT nombre FROM materias WHERE id = :id"),
+        {"id": request.materia_id}
+    ).fetchone()
+    if nombre_mat:
+        consulta_partes.append(nombre_mat[0])
+    if request.submateria_id:
+        nombre_sub = db.execute(
+            text("SELECT nombre FROM submaterias WHERE id = :id"),
+            {"id": request.submateria_id}
+        ).fetchone()
+        if nombre_sub:
+            consulta_partes.append(nombre_sub[0])
+    consulta = " - ".join(consulta_partes) if consulta_partes else None
+
+    chunks = await rag_service.recuperar_chunks(
+        db, request.materia_id, request.submateria_id, enunciado=consulta
+    )
     
-    chunks = await rag_service.recuperar_chunks(db, request.materia_id, request.submateria_id)
     print(f"Chunks recuperados: {len(chunks)}")
     if chunks:
         print(f"Primer chunk: {chunks[0][:200]}")

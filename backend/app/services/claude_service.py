@@ -62,7 +62,7 @@ def validar_articulos(solucion_modelo: dict, chunks: list[str]) -> dict:
             importes_problematicos.append(imp)
 
     return {
-        "valido": len(problematicos) == 0 and len(importes_problematicos) == 0,
+        "valido": len(problematicos) == 0,
         "articulos_problematicos": problematicos,
         "importes_problematicos": importes_problematicos
     }
@@ -77,80 +77,99 @@ async def generar_supuesto(chunks: list[str], materia: str, dificultad: int, for
       - Genera hasta 5 infracciones en total
       - Infracciones claramente identificables, sin ambigüedad
       - Situación sencilla con un único tipo de establecimiento
-      - Sin preguntas teóricas adicionales
-      - Circunstancias simples y directas""",
+      - Sin preguntas teóricas adicionales""",
           2: f"""NIVEL MEDIO:
       - Genera hasta 7 infracciones en total
       - Al menos 2 infracciones de calificación GRAVE o MUY GRAVE
       - Puede incluir concurrencia de normativas distintas
-      - Circunstancias con algún elemento que requiera análisis
-      {'''- Puede añadir UNA pregunta teórica al final del enunciado
-      - Si añades pregunta teórica, fórmula SIEMPRE así al final:
+      {'''- Puede añadir UNA pregunta teórica al final del enunciado, así:
         PREGUNTAS:
         1. ¿texto de la pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}""",
           3: f"""NIVEL AVANZADO:
       - Genera hasta 10 infracciones en total
-      - Al menos 3 o 4 infracciones de calificación MUY GRAVE
-      - Obligatorio incluir concurrencia de varias normativas distintas
-      - Circunstancias complejas con múltiples sujetos infractores
-      {'''- Obligatorio añadir entre 1 y 2 preguntas teóricas al final
-      - Las preguntas teóricas SIEMPRE al final en este formato:
+      - Al menos 3 o 4 de calificación MUY GRAVE, con concurrencia de varias normativas
+      - Circunstancias complejas con múltiples sujetos
+      {'''- Añade 1 o 2 preguntas teóricas al final, así:
         PREGUNTAS:
-        1. ¿texto de la primera pregunta?
-        2. ¿texto de la segunda pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}"""
+        1. ¿primera pregunta?
+        2. ¿segunda pregunta?''' if formato != 'test' else '- NO añadas preguntas teóricas al enunciado'}"""
       }
 
-    prompt = f"""CONTEXTO NORMATIVO — USA SOLO ESTO:
+    prompt = f"""CONTEXTO NORMATIVO — Es tu ÚNICA fuente. No uses nada que no esté aquí:
 {contexto}
 
-TAREA: Genera un supuesto práctico con estas características:
-- Materia: {materia}
-- Dificultad: {dificultad}/3
-- Establece hora concreta, tipo de establecimiento y circunstancias reales
-- USA EXCLUSIVAMENTE artículos del contexto anterior
+═══════════════════════════════════════════════
+TAREA
+═══════════════════════════════════════════════
+Genera un supuesto práctico de {materia} (dificultad {dificultad}/3) con hora, lugar y circunstancias concretas,
+y resuélvelo siguiendo el MÉTODO de abajo.
 
-INSTRUCCIONES DE DIFICULTAD:
 {instrucciones_dificultad[dificultad]}
 
-FORMATO DEL ENUNCIADO:
-- Redacta el supuesto como texto narrativo continuo, sin listas ni numeración
-- Describe los hechos de forma fluida como si fuera un relato policial real
-- SOLO al final, si hay preguntas teóricas, añádelas en este formato exacto:
-  PREGUNTAS:
-  1. ¿texto de la pregunta?
-  2. ¿texto de la pregunta?
+El ENUNCIADO se redacta como relato policial continuo, sin listas. Si procede pregunta teórica, va al final con el
+formato PREGUNTAS: indicado arriba.
 
-ESTRUCTURA DE LA SOLUCIÓN (esquema de examen de 5 puntos):
-1. hechos_relevantes: extrae del supuesto los hechos jurídicamente relevantes, en frases breves.
-2. infracciones: administrativas, con precepto, responsable, calificación, órgano y sanción CUANDO PROCEDA.
-3. indicios_penales: ilícitos penales como INDICIOS y presunto autor, nunca como condena.
-4. actuacion_policial: actuación completa (aseguramiento, asistencia, pruebas, diligencias, inmovilización, documentación).
-5. respuesta_teorica: si el enunciado incluye PREGUNTAS, respóndelas de forma desarrollada citando artículos del contexto.
+═══════════════════════════════════════════════
+MÉTODO DE RESOLUCIÓN (en orden, sin saltarte pasos)
+═══════════════════════════════════════════════
+PASO 1 · INVENTARIO. Lee el enunciado entero, de principio a fin, y enumera en "hechos_relevantes" TODOS los hechos
+jurídicamente relevantes, en orden. No te detengas en los primeros: un supuesto suele tener 6-10 hechos.
 
-IMPORTANTE SOBRE LAS SANCIONES:
-- Solo indica un importe si aparece TEXTUALMENTE en el contexto normativo de arriba.
-- Si el contexto marca la cuantía como "[VIG]", "pendiente" o no la da, pon sancion_min, sancion_max
-  y sancion_impuesta a null, y en justificacion_sancion escribe:
-  "Cuantía pendiente de cotejo según LSV/RGC (no consta en el material)".
-- NUNCA inventes ni aproximes un importe de memoria. Mejor null que un número no respaldado.
+PASO 2 · ANÁLISIS VINCULANTE. Analiza CADA hecho del inventario. Ninguno puede quedar sin tratar:
+  - infracción administrativa  -> "infracciones"
+  - apariencia delictiva       -> "indicios_penales"
+  - no procede sanción         -> explícalo en "consideracion_previa.observaciones"
 
-IMPORTANTE SOBRE LOS DELITOS:
-- Si hay hechos con apariencia delictiva, NO los pongas en "infracciones".
-  Inclúyelos en "indicios_penales" como atribución indiciaria, sin penas (salvo que la pena conste textual en el contexto)
-  y con la diligencia policial que corresponda. Nunca los des por "consumados".
-- Si el contexto dice que la vía penal desplaza o supedita la administrativa, no dupliques con denuncia administrativa.
+PASO 3 · CONCURSO DE INFRACCIONES. Cuando varias infracciones recaigan sobre hechos próximos, justifica EXPRESAMENTE
+por qué se sancionan por separado: indica que no hay non bis in idem (protegen bienes jurídicos distintos) o explica
+el concurso de normas aplicable. Usa el campo "justificacion_concurso" para esto.
 
-IMPORTANTE SOBRE LA ACTUACIÓN POLICIAL Y LA RESPUESTA TEÓRICA:
-- En "actuacion_policial", incluye solo los apartados que procedan según los hechos; omite los que no apliquen.
-- En "respuesta_teorica", cita únicamente artículos que estén en el contexto. Si no hay preguntas, deja el array vacío.
+PASO 4 · VERIFICACIÓN. Comprueba que cada hecho del inventario aparece tratado. Si falta alguno, complétalo.
 
-Devuelve SOLO este JSON:
+═══════════════════════════════════════════════
+REGLAS DE PRECISIÓN (innegociables)
+═══════════════════════════════════════════════
+• DATOS: artículos, cuantías, puntos y órganos SOLO si constan textualmente en el contexto. Si una cuantía está
+  marcada "[VIG]"/"pendiente" o no aparece, deja sancion_min/max/impuesta en null y anótalo en justificacion_sancion.
+  Nunca inventes ni aproximes de memoria: mejor null que un número no respaldado.
+
+• PENAL CON CAUTELA: los hechos con apariencia delictiva van en "indicios_penales", nunca como delito consumado ni con
+  penas (salvo que la pena conste en el contexto). Usa fórmula cautelar: "existen indicios que deberán ser valorados
+  por la autoridad judicial". No abras vía penal sin base en los hechos. Si la vía penal desplaza a la administrativa,
+  no dupliques con denuncia administrativa.
+
+• NO INFERIR: cíñete a lo que el enunciado dice literalmente; no añadas intenciones ni causas. Si la calificación
+  depende de un dato no aportado, escríbelo: "requiere valoración según se acredite X".
+
+• ACTUACIÓN A MEDIDA: en "actuacion_policial" incluye SOLO lo que los hechos justifican. Cada actuación debe poder
+  anclarse a un hecho del inventario. No metas por rutina balizamiento, reportaje fotográfico, asistencia sanitaria,
+  pruebas de alcohol/drogas ni diligencias que el supuesto no pida.
+
+• CRITERIOS DISCUTIBLES: si alguna cuestión admite más de una interpretación razonable (calificación dudosa, concurso
+  discutible, competencia no clara), recógela en "criterios_discutibles" exponiendo las opciones. Si no hay ninguna,
+  deja el array vacío.
+
+• RESPUESTA TEÓRICA: en "respuesta_teorica" cita solo artículos del contexto. Sin preguntas, array vacío.
+
+• CONSIDERACIÓN PREVIA — datos_contexto: incluye los datos de contexto relevantes según el TIPO de supuesto,
+  eligiendo tú la etiqueta adecuada. Ejemplos: en espectáculos públicos "Tipo de establecimiento"; en tráfico
+  "Vía" o "Lugar"; en otras materias la que proceda. Pon solo los datos que aporta el enunciado; no inventes.
+
+═══════════════════════════════════════════════
+Devuelve SOLO este JSON (sin texto adicional ni markdown):
+═══════════════════════════════════════════════
+
+═══════════════════════════════════════════════
+Devuelve SOLO este JSON (sin texto adicional ni markdown):
+═══════════════════════════════════════════════
 {{
-  "enunciado": "texto del supuesto como aparecería en un examen real",
+  "enunciado": "texto del supuesto como en un examen real",
   "solucion_modelo": {{
     "hechos_relevantes": [],
     "consideracion_previa": {{
-      "tipo_establecimiento": "",
+      "datos_contexto": [
+        {{"etiqueta": "", "valor": ""}}
+      ],
       "hora": "",
       "normativa_aplicable": [],
       "observaciones": ""
@@ -165,18 +184,18 @@ Devuelve SOLO este JSON:
         "sancion_min": null,
         "sancion_max": null,
         "sancion_impuesta": null,
-        "justificacion_sancion": "razonamiento de por qué se impone esta cuantía concreta",
+        "justificacion_sancion": "",
         "organo_sancionador": "",
         "precepto_organo": "art. X Ley Y"
       }}
     ],
+    "justificacion_concurso": "",
     "indicios_penales": [
       {{
         "descripcion": "",
-        "tipo_penal_indiciario": "indicios del delito del art. X (no consumado)",
+        "tipo_penal_indiciario": "indicios del delito del art. X (a valorar por la autoridad judicial)",
         "presunto_autor": "",
-        "diligencias": "",
-        "preferencia_penal": true
+        "diligencias": ""
       }}
     ],
     "actuacion_policial": {{
@@ -189,6 +208,9 @@ Devuelve SOLO este JSON:
         {{"documento": "", "organismo_destino": ""}}
       ]
     }},
+    "criterios_discutibles": [
+      {{"cuestion": "", "interpretaciones": ""}}
+    ],
     "respuesta_teorica": [
       {{"pregunta": "", "respuesta": "", "articulos": []}}
     ],
@@ -203,7 +225,7 @@ Devuelve SOLO este JSON:
         try:
             response = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=8000,
+                max_tokens=16000,
                 system=get_system_prompt(materia),
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -211,12 +233,13 @@ Devuelve SOLO este JSON:
             resultado = parsear_json(response.content[0].text)
 
             validacion = validar_articulos(resultado["solucion_modelo"], chunks)
-            if validacion["valido"]:
-                return {"ok": True, "datos": resultado}
-            else:
-                print(f"Intento {intento + 1}: artículos problemáticos: {validacion['articulos_problematicos']}")
-                prompt += f"\n\nADVERTENCIA: No uses estos artículos, no están en el contexto: {validacion['articulos_problematicos']}"
-
+            # Los artículos problemáticos se reportan pero NO fuerzan reintento
+            # (daban demasiados falsos positivos con artículos procesales correctos,
+            #  ej. arts. LECrim, disparando el tiempo de generación sin mejorar calidad).
+            if validacion["articulos_problematicos"]:
+                print(f"Aviso (no bloqueante): posibles artículos a revisar: {validacion['articulos_problematicos']}")
+            return {"ok": True, "datos": resultado}
+        
         except Exception as e:
             ultimo_error = str(e)
             print(f"Intento {intento + 1} fallido: {e}")
@@ -256,10 +279,11 @@ FICHA TÉCNICA POR INFRACCIÓN (campo "ficha_tecnica"):
 Para CADA infracción relevante del supuesto, construye una ficha con estos campos:
   normativa, articulo_completo, precepto, sancion, responsable, organo_competente,
   detraccion_puntos, medidas_provisionales, prescripcion.
-CAMPO articulo_completo: pon la referencia del artículo (ej. "art. 76 LSV") y, SOLO SI el texto literal del artículo
-consta TEXTUALMENTE en la normativa de referencia, añádelo a continuación tras un guion. Formato:
-"art. 76 LSV — [texto literal tal como aparece en el material]". Si el texto literal NO está en los chunks,
-incluye solo la referencia. NUNCA reproduzcas de memoria el texto de un artículo que no esté en el material.
+CAMPO articulo_completo: pon la referencia del artículo (ej. "art. 21.7 LEPARA") seguida de una explicación
+práctica BREVE de qué regula y cómo se aplica, tomada EXCLUSIVAMENTE de la normativa de referencia y la solución
+modelo (qué conducta sanciona, calificación, deslinde si lo hay). Formato: "art. 21.7 LEPARA — [explicación
+práctica extraída del material]". NUNCA inventes ni añadas de memoria contenido que no esté en los chunks.
+Este campo SIEMPRE debe rellenarse (al menos la referencia); no lo omitas.
 REGLA DE ORO de la ficha: incluye ÚNICAMENTE los campos cuyo dato conste TEXTUALMENTE en la normativa de referencia
 o en la solución modelo. Si un dato NO consta, OMITE ESE CAMPO por completo (no lo escribas, no pongas "pendiente",
 no pongas null, no pongas "no consta"). Una ficha con 4 campos verídicos es correcta; una con 9 campos inventados es un error grave.
@@ -318,12 +342,12 @@ Devuelve SOLO este JSON:
   "consejo_estudio": "qué bloque o normativa repasar"
 }}
 
-RECORDATORIO FINAL: en "ficha_tecnica", omite todo campo cuyo dato no esté textualmente en la normativa de referencia o la solución modelo. No inventes para rellenar."""
+RECORDATORIO FINAL: en "ficha_tecnica", omite todo campo cuyo dato no esté en la normativa de referencia o la solución modelo, EXCEPTO "articulo_completo", que siempre se rellena (referencia + explicación práctica del material). No inventes para rellenar."""
 
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
+            max_tokens=8000,
             system=get_system_prompt(materia),
             messages=[{"role": "user", "content": prompt}]
         )

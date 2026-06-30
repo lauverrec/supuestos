@@ -57,10 +57,10 @@ export default function Landing() {
             <Shield size={22} />
             PolicialMVP
           </div>
-          <div className="flex items-center gap-6">
-            <a href="#como-funciona" className="text-sm text-gray-500 hover:text-gray-800">Cómo funciona</a>
-            <a href="#precios" className="text-sm text-gray-500 hover:text-gray-800">Precios</a>
-            <a href="#faq" className="text-sm text-gray-500 hover:text-gray-800">FAQ</a>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <a href="#como-funciona" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-800">Cómo funciona</a>
+            <a href="#precios" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-800">Precios</a>
+            <a href="#faq" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-800">FAQ</a>
             <Link
               to="/dashboard"
               className="bg-policial-azul text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-policial-azulMedio transition-colors"
@@ -83,10 +83,10 @@ export default function Landing() {
         <p className="text-lg text-gray-500 mb-10 max-w-2xl mx-auto">
           Practica con supuestos reales, recibe corrección detallada por infracción y llega al examen con la máxima preparación.
         </p>
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
             to="/dashboard"
-            className="bg-policial-azul text-white font-bold px-8 py-4 rounded-xl text-lg hover:bg-policial-azulMedio transition-colors shadow-lg"
+            className="w-full sm:w-auto text-center bg-policial-azul text-white font-bold px-8 py-4 rounded-xl text-lg hover:bg-policial-azulMedio transition-colors shadow-lg"
           >
             Empezar gratis
           </Link>
@@ -227,7 +227,7 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-gray-100 py-8">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-sm text-gray-400">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-400 text-center">
           <div className="flex items-center gap-2 font-bold text-policial-azul">
             <Shield size={16} />
             PolicialMVP
